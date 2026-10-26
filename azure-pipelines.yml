@@ -24,9 +24,9 @@ parameters:
     default: 'aviansh.sharma@newvision-software.com'
 
   - name: skipProviderIfNoGateway
-    displayName: 'Skip provider job when gateway URL is empty (CI-friendly)'
+    displayName: 'Skip provider when gateway URL is empty (keep consumer green on CI)'
     type: boolean
-    default: false
+    default: true
 
 trigger:
   branches:
@@ -146,13 +146,15 @@ stages:
               fi
 
               if [ -z "$GATEWAY" ]; then
-                if [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-false}" = "True" ] || [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-false}" = "true" ]; then
-                  echo "##vso[task.logissue type=warning]No gateway URL — skipping provider verification (skipProviderIfNoGateway=true)."
-                  echo "##vso[task.setvariable variable=PROVIDER_SKIPPED]true"
-                  exit 0
+                # Default: skip provider on CI pushes (no Run-pipeline UI values).
+                # Set skipProviderIfNoGateway=false on Run pipeline to require a URL.
+                if [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-true}" = "False" ] || [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-true}" = "false" ]; then
+                  echo "##vso[task.logissue type=error]No TaxMesh gateway URL. Fill Run pipeline → 'TaxMesh gateway base URL', or set variable GATEWAY_BASE_URL."
+                  exit 1
                 fi
-                echo "##vso[task.logissue type=error]No TaxMesh gateway URL. Use Run pipeline → 'TaxMesh gateway base URL', or set pipeline variable GATEWAY_BASE_URL."
-                exit 1
+                echo "##vso[task.logissue type=warning]No gateway URL — skipping provider verification. Re-run with Run pipeline → TaxMesh gateway base URL to verify against a live stack."
+                echo "##vso[task.setvariable variable=PROVIDER_SKIPPED]true"
+                exit 0
               fi
 
               echo "##vso[task.setvariable variable=RESOLVED_GATEWAY_BASE_URL]$GATEWAY"
