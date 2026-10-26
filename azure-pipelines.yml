@@ -1,34 +1,21 @@
-# CI/CD: Pact contract tests gate (TaxMesh) — EY_Demo-style reporting
-# Azure DevOps: https://dev.azure.com/InnoVisionDA/ContractTesting
-# GitHub:       https://github.com/Avinash258/ContractTestingDemoProject
+# CI/CD: Pact contract tests gate (TaxMesh)
+# Pattern reference: EY_Demo ContractTestDemo-Pact (build 260)
+#   https://dev.azure.com/InnoVisionDA/EY_Demo/_build/results?buildId=260
+# Project: https://dev.azure.com/InnoVisionDA/ContractTesting
+# GitHub:  https://github.com/Avinash258/ContractTestingDemoProject
 #
-# Run pipeline UI parameters (recommended):
-#   gatewayBaseUrl  — TaxMesh gateway (required for provider)
-#   reportEmailTo   — HTML report recipient
-#
-# Optional pipeline variables (secrets where noted):
-#   GATEWAY_BASE_URL / TAXMESH_BASE_URL — fallback if UI param empty
-#   URL_CLM … URL_DOC
-#   SMTP_USER / SMTP_PASS (secret) — required to actually send email
-#   SMTP_FROM / SMTP_HOST / SMTP_PORT
+# Run pipeline UI — fill/override TARGET URL when Cloudflare tunnel rotates.
 
-# These fields appear in Azure DevOps → Pipelines → Run pipeline (NOT from the YAML editor Run).
 parameters:
   - name: gatewayBaseUrl
-    displayName: '1) TaxMesh TARGET URL (update when Cloudflare/ngrok URL changes)'
+    displayName: 'TaxMesh TARGET URL (gateway)'
     type: string
-    # Current tunnel — override on Run pipeline when it rotates
     default: 'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
 
   - name: reportEmailTo
-    displayName: '2) Report email TO (HTML results)'
+    displayName: 'Send HTML report to'
     type: string
     default: 'aviansh.sharma@newvision-software.com'
-
-  - name: skipProviderIfNoGateway
-    displayName: '3) Skip provider if TARGET URL is empty'
-    type: boolean
-    default: false
 
 trigger:
   branches:
@@ -48,26 +35,26 @@ pool:
 variables:
   NODE_VERSION: '20.x'
   PACT_DO_NOT_TRACK: 'true'
+  # EY_Demo-style: put target URL in YAML variables (auto-injected into scripts)
+  GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+  TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+  PACT_PROVIDER_URL: ${{ parameters.gatewayBaseUrl }}
+  REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
   SMTP_HOST: 'smtp.office365.com'
   SMTP_PORT: '587'
   SMTP_FROM: 'aviansh.sharma@newvision-software.com'
-  # Compile-time from Run-pipeline parameters (do not re-wrap as $(VAR) — that was dropping the URL)
-  GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-  TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-  REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
-  SKIP_PROVIDER_IF_NO_GATEWAY: ${{ parameters.skipProviderIfNoGateway }}
 
 stages:
   - stage: ContractTests
     displayName: 'Pact Contract Tests'
     jobs:
       - job: ConsumerContracts
-        displayName: 'Consumer — generate pact files + report seed'
+        displayName: 'Consumer — generate pact files'
         steps:
           - checkout: self
 
           - task: NodeTool@0
-            displayName: 'Use Node.js $(NODE_VERSION)'
+            displayName: 'Install Node.js'
             inputs:
               versionSpec: $(NODE_VERSION)
 
@@ -75,164 +62,98 @@ stages:
             displayName: 'Install dependencies'
 
           - script: npm run test:contract:consumer-only
-            displayName: 'Run consumer contract tests + HTML/JSON report'
+            displayName: 'Run consumer contract tests'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
 
-          - task: PublishPipelineArtifact@1
-            displayName: 'Publish pact files'
+          - publish: $(System.DefaultWorkingDirectory)/pacts
+            artifact: pact-files
             condition: succeededOrFailed()
-            inputs:
-              targetPath: $(System.DefaultWorkingDirectory)/pacts
-              artifact: pact-files
 
-          - task: PublishPipelineArtifact@1
-            displayName: 'Publish consumer reports'
+          - publish: $(System.DefaultWorkingDirectory)/reports
+            artifact: pact-reports
             condition: succeededOrFailed()
-            inputs:
-              targetPath: $(System.DefaultWorkingDirectory)/reports
-              artifact: pact-reports
 
       - job: ProviderVerification
-        displayName: 'Provider — verify TaxMesh APIs + email report'
+        displayName: 'Provider — verify API against contracts'
         dependsOn: ConsumerContracts
         condition: succeeded()
         steps:
           - checkout: self
 
           - task: NodeTool@0
-            displayName: 'Use Node.js $(NODE_VERSION)'
+            displayName: 'Install Node.js'
             inputs:
               versionSpec: $(NODE_VERSION)
 
           - script: npm ci
             displayName: 'Install dependencies'
 
-          - task: DownloadPipelineArtifact@2
-            displayName: 'Download pact files'
-            inputs:
-              buildType: current
-              artifactName: pact-files
-              targetPath: $(Pipeline.Workspace)/pact-files
+          - download: current
+            artifact: pact-files
 
-          - task: DownloadPipelineArtifact@2
-            displayName: 'Download consumer reports'
-            inputs:
-              buildType: current
-              artifactName: pact-reports
-              targetPath: $(Pipeline.Workspace)/pact-reports
+          - download: current
+            artifact: pact-reports
 
           - script: |
               set -e
               mkdir -p pacts reports
-              cp -r "$(Pipeline.Workspace)/pact-files/"* pacts/ || true
-              cp -r "$(Pipeline.Workspace)/pact-reports/"* reports/ || true
+              cp -r "$(Pipeline.Workspace)/pact-files/"* pacts/
+              cp -r "$(Pipeline.Workspace)/pact-reports/"* reports/ 2>/dev/null || true
               ls -la pacts reports || true
-            displayName: 'Restore pact files and consumer results'
+            displayName: 'Copy pact files into workspace'
 
-          - bash: |
+          # EY_Demo pattern: use $VAR from pipeline variables (no env: remapping)
+          - script: |
               set -euo pipefail
-              # Prefer compile-time parameter (PARAM_*), then job env, then baked-in default.
-              normalize() {
-                local v="${1:-}"
-                v="$(echo "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-                case "$v" in
-                  ''|'$(GATEWAY_BASE_URL)'|'$(TAXMESH_BASE_URL)') echo "" ;;
-                  *) echo "$v" ;;
-                esac
-              }
-              GATEWAY="$(normalize "${PARAM_GATEWAY_BASE_URL:-}")"
-              if [ -z "$GATEWAY" ]; then GATEWAY="$(normalize "${GATEWAY_BASE_URL:-}")"; fi
-              if [ -z "$GATEWAY" ]; then GATEWAY="$(normalize "${TAXMESH_BASE_URL:-}")"; fi
-              if [ -z "$GATEWAY" ]; then GATEWAY="$(normalize "${FALLBACK_GATEWAY_BASE_URL:-}")"; fi
+              GATEWAY="${GATEWAY_BASE_URL:-${PACT_PROVIDER_URL:-${TAXMESH_BASE_URL:-}}}"
               GATEWAY="${GATEWAY%/}"
-
-              echo "Resolved gateway candidate: '${GATEWAY}'"
+              echo "Pre-check gateway: ${GATEWAY}/api/health"
               if [ -z "$GATEWAY" ]; then
-                if [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-True}" = "False" ] || [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-true}" = "false" ]; then
-                  echo "##vso[task.logissue type=error]No TaxMesh gateway URL. Fill Run pipeline → TaxMesh TARGET URL."
-                  exit 1
-                fi
-                echo "##vso[task.logissue type=warning]No gateway URL — skipping provider verification."
-                echo "##vso[task.setvariable variable=PROVIDER_SKIPPED]true"
-                exit 0
-              fi
-
-              echo "##vso[task.setvariable variable=RESOLVED_GATEWAY_BASE_URL]$GATEWAY"
-              echo "Pre-check gateway: $GATEWAY/api/health"
-              if ! curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 "$GATEWAY/api/health" | head -c 800; then
-                echo
-                echo "##vso[task.logissue type=error]Gateway health check failed for $GATEWAY/api/health"
+                echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is empty. Set Run pipeline → TaxMesh TARGET URL."
                 exit 1
               fi
+              curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 \
+                "${GATEWAY}/api/health" | head -c 800
               echo
-            displayName: 'Pre-check — TaxMesh gateway health'
-            env:
-              # Bake parameter at compile time — avoids empty $(MACRO) expansion bugs
-              PARAM_GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-              FALLBACK_GATEWAY_BASE_URL: 'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
-              GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-              TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-              SKIP_PROVIDER_IF_NO_GATEWAY: ${{ parameters.skipProviderIfNoGateway }}
+            displayName: 'Health check — TaxMesh gateway'
 
           - script: |
-              if [ "${PROVIDER_SKIPPED:-}" = "true" ]; then
-                echo "Provider verification skipped (no gateway URL)."
-                exit 0
-              fi
-              export GATEWAY_BASE_URL="${RESOLVED_GATEWAY_BASE_URL:-${GATEWAY_BASE_URL:-}}"
-              echo "Provider GATEWAY_BASE_URL=$GATEWAY_BASE_URL"
+              set -euo pipefail
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+              export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
+              echo "Provider verify against: $GATEWAY_BASE_URL"
               npm run test:contract:provider-only
             displayName: 'Run provider verification + generate report'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
-              RESOLVED_GATEWAY_BASE_URL: $(RESOLVED_GATEWAY_BASE_URL)
-              GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-              TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-              URL_CLM: $(URL_CLM)
-              URL_MDM: $(URL_MDM)
-              URL_ACC: $(URL_ACC)
-              URL_TAX: $(URL_TAX)
-              URL_ALC: $(URL_ALC)
-              URL_DOC: $(URL_DOC)
+              SMTP_USER: $(SMTP_USER)
+              SMTP_PASS: $(SMTP_PASS)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
-              PROVIDER_SKIPPED: $(PROVIDER_SKIPPED)
 
-          - bash: |
-              set -euo pipefail
-              TO="${PARAM_REPORT_EMAIL_TO:-${REPORT_EMAIL_TO:-}}"
-              case "$TO" in ''|'$(REPORT_EMAIL_TO)') TO="" ;; esac
-              if [ -z "$TO" ]; then
-                echo "No report email recipient — skipping send."
-                exit 0
-              fi
+          - script: |
               if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
-                echo "SMTP_USER or SMTP_PASS not set — skipping email report (recipient would be: $TO)."
+                echo "SMTP_USER or SMTP_PASS not set — skipping email report."
                 exit 0
               fi
-              export REPORT_EMAIL_TO="$TO"
-              echo "Sending HTML report to: $REPORT_EMAIL_TO"
+              echo "Sending HTML report to: ${REPORT_EMAIL_TO}"
               npm run send-report
             displayName: 'Email HTML report'
             condition: succeededOrFailed()
             continueOnError: true
             env:
-              PARAM_REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
-              REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
               SMTP_USER: $(SMTP_USER)
               SMTP_PASS: $(SMTP_PASS)
               SMTP_HOST: $(SMTP_HOST)
               SMTP_PORT: $(SMTP_PORT)
               SMTP_FROM: $(SMTP_FROM)
+              REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
 
-          - task: PublishPipelineArtifact@1
-            displayName: 'Publish provider + combined report'
+          - publish: $(System.DefaultWorkingDirectory)/reports
+            artifact: pact-provider-report
             condition: succeededOrFailed()
-            inputs:
-              targetPath: $(System.DefaultWorkingDirectory)/reports
-              artifact: pact-provider-report
