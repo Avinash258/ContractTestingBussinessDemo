@@ -85,4 +85,37 @@ Email uses **Gmail SMTP** (`smtp.gmail.com:587`). Create app password: https://m
 npm run test:contract              # consumer + provider + HTML
 npm run test:contract:consumer-only
 npm run send-report                # needs SMTP_* env
+npm run report:refresh             # rebuild Excel + dashboard from reports/pact-report.json
 ```
+
+Open the interactive UI at [`dashboard/index.html`](dashboard/index.html) (uses `dashboard/data/latest.json` / `latest.js`).
+
+## Report colours & regeneration
+
+Excel (`reports/TaxMesh-Contract-Report.xlsx`) and the dashboard share one status palette:
+
+| Status | Fill | Font | Meaning |
+|--------|------|------|---------|
+| passed / covered / healthy | `#DCFCE7` | `#166534` | OK |
+| failed / error | `#FEE2E2` | `#991B1B` | Broken contract |
+| skipped / unknown | `#FEF3C7` | `#92400E` | Not run / unclear |
+| deferred | `#E0E7FF` | `#3730A3` | Intentionally out of gate |
+| partial | `#FFEDD5` | `#9A3412` | Path exercised but incomplete (e.g. upload 400-only) |
+
+Duration colour-scales: green (fast) → yellow → red (slow). Service chips (CLM/MDM/ACC/TAX/ALC/DOC/Gateway/Client) use fixed pastels on CT Matrix / Service Health.
+
+### Add a new status colour
+
+1. Add the status to `PALETTE` in [`src/reporting/excelReport.ts`](src/reporting/excelReport.ts).
+2. Mirror the same fill/font in `dashboard/index.html` (`.badge.<status>` + SpreadsheetML fallback styles).
+3. Include the status in Excel conditional-format rules (`addStatusConditionalRules`) and the Legend sheet.
+
+### Regenerate the report
+
+```bash
+npm run test:contract              # full run → JSON + Excel + dashboard data
+# or, without re-running tests:
+npm run report:refresh             # from reports/pact-report.json (+ optional reports/swagger-coverage.json)
+```
+
+Coverage rows come from `reports/swagger-coverage.json` (via `npm run test:swagger-coverage`). Upload endpoints `/api/filing/upload/{acc|clm|mdm}` are reported as **partial** when only the 400 error path is contracted.

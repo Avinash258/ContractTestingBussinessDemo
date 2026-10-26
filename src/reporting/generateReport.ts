@@ -4,9 +4,36 @@ import { buildTaxMeshServiceMap, buildServiceMapSvg } from './serviceMap';
 import { packInteractiveDashboardZip } from './dashboardZip';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
 import { enrichPhaseEndpoints } from './pactEndpointLookup';
-import { writeExcelReport } from './excelReport';
+import { loadCoverageRows, writeExcelReport } from './excelReport';
 import { config } from '../config';
 import type { InteractionResult, PactReport, PhaseStatus, PhaseSummary } from './types';
+
+function attachCoverage(report: PactReport): PactReport {
+  const rows = loadCoverageRows();
+  if (!rows.length) return report;
+  const covered = rows.filter((r) => r.status === 'covered').length;
+  const partial = rows.filter((r) => r.status === 'partial').length;
+  const deferred = rows.filter((r) => r.status === 'deferred').length;
+  const missing = rows.filter((r) => r.status === 'missing').length;
+  report.coverage = {
+    totals: {
+      ops: rows.length,
+      covered,
+      partial,
+      missing,
+      deferred,
+    },
+    rows: rows.map((r) => ({
+      method: r.method,
+      path: r.path,
+      status: r.status,
+      notes: r.notes,
+      operation: r.operation,
+      originalStatus: r.originalStatus,
+    })),
+  };
+  return report;
+}
 
 const REPORTS_DIR = path.resolve(process.cwd(), 'reports');
 
@@ -584,7 +611,7 @@ export function buildReport(input: {
   const provider = enrichPhaseEndpoints(input.provider, pactsDir);
   const serviceMap = buildTaxMeshServiceMap(consumer, provider);
 
-  return {
+  return attachCoverage({
     generatedAt: new Date().toISOString(),
     project: 'TaxMesh Pact Contract Tests',
     overallStatus,
@@ -612,7 +639,7 @@ export function buildReport(input: {
       },
     },
     environment: input.environment || {},
-  };
+  });
 }
 
 export async function writeReports(report: PactReport): Promise<{

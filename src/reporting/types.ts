@@ -81,4 +81,24 @@ export interface PactReport {
     provider: Partial<PhaseSummary> & { ran: boolean; status: PhaseStatus };
   };
   environment: Record<string, string>;
+  /** Optional swagger ↔ pact coverage (from reports/swagger-coverage.json). */
+  coverage?: {
+    totals?: {
+      ops?: number;
+      covered?: number;
+      partial?: number;
+      missing?: number;
+      deferred?: number;
+    };
+    rows?: Array<{
+      method: string;
+      path: string;
+      status: string;
+      notes?: string;
+      note?: string;
+      operation?: string;
+      operationId?: string;
+      originalStatus?: string;
+    }>;
+  };
 }
