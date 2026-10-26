@@ -1,14 +1,1038 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TaxMesh Contract Dashboard</title>
-  <meta http-equiv="refresh" content="0; url=data/interactive-service-map.html" />
+  <title>TaxMesh Contract Test Dashboard</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --border: #dbe3ef;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-2: #4f46e5;
+      --passed: #15803d;
+      --failed: #b91c1c;
+      --skipped: #b45309;
+      --shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #ffffff;
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .layout {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding: 24px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(79, 70, 229, 0.04));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button, .file-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.secondary, .file-btn.secondary {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .file-btn { display: inline-block; position: relative; overflow: hidden; }
+    .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+    .status-hero {
+      display: grid;
+      grid-template-columns: 1.2fr 2fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .status-hero { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .overall {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      min-height: 220px;
+    }
+
+    .overall-ring {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+      border: 6px solid var(--border);
+    }
+
+    .overall.passed .overall-ring {
+      border-color: var(--passed);
+      color: var(--passed);
+      box-shadow: 0 0 30px rgba(34, 197, 94, 0.25);
+    }
+
+    .overall.failed .overall-ring {
+      border-color: var(--failed);
+      color: var(--failed);
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.25);
+    }
+
+    .overall.unknown .overall-ring {
+      border-color: var(--skipped);
+      color: var(--skipped);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .metric {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 6px 0;
+    }
+
+    .progress {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .progress.passed > span { background: linear-gradient(90deg, #16a34a, var(--passed)); }
+    .progress.failed > span { background: linear-gradient(90deg, #dc2626, var(--failed)); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+
+    .card .meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+    }
+
+    .env-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .env-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+
+    .env-item span:first-child { color: var(--muted); }
+
+    .env-item code {
+      color: var(--text);
+      word-break: break-all;
+      text-align: right;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge.passed { background: rgba(34, 197, 94, 0.15); color: var(--passed); }
+    .badge.failed { background: rgba(239, 68, 68, 0.15); color: var(--failed); }
+    .badge.skipped, .badge.unknown { background: rgba(245, 158, 11, 0.15); color: var(--skipped); }
+
+    .failures {
+      display: grid;
+      gap: 12px;
+    }
+
+    .failure {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .failure h4 { margin-bottom: 8px; color: #991b1b; }
+
+    .failure ul {
+      margin-left: 18px;
+      color: #b91c1c;
+      font-size: 0.85rem;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 24px;
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+    }
+
+    .hidden { display: none !important; }
+
+    .phase-card h2 { font-size: 1rem; }
+
+    .service-map-section { margin-bottom: 20px; }
+
+    .service-map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 14px;
+      font-size: 0.85rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+    }
+
+    .legend-dot.passed { color: var(--passed); }
+    .legend-dot.failed { color: var(--failed); }
+    .legend-dot.unknown { color: var(--skipped); }
+
+    .service-map-canvas {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+      overflow: hidden;
+      min-height: 420px;
+    }
+
+    .service-map-canvas svg {
+      width: 100%;
+      min-height: 420px;
+      display: block;
+    }
+
+    .map-node { cursor: pointer; }
+    .map-node:hover circle:first-of-type { stroke-width: 5; }
+    .map-node.selected circle:first-of-type { stroke-width: 6; }
+
+    .map-node.passed .node-ring { animation: pulse-green 2s ease-in-out infinite; }
+    .map-node.failed .node-ring { animation: pulse-red 1.5s ease-in-out infinite; }
+
+    .map-node.skipped .node-ring,
+    .map-node.unknown .node-ring { animation: none; }
+
+    @keyframes pulse-green {
+      0%, 100% { opacity: 0.25; r: 42; }
+      50% { opacity: 0.55; r: 46; }
+    }
+
+    @keyframes pulse-red {
+      0%, 100% { opacity: 0.35; r: 42; }
+      50% { opacity: 0.75; r: 48; }
+    }
+
+    .service-detail {
+      margin-top: 16px;
+      padding: 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.875rem;
+    }
+
+    .service-detail h3 { font-size: 1rem; margin-bottom: 8px; }
+
+    .service-detail .endpoint-list {
+      margin-top: 10px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .service-detail .endpoint-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+  </style>
 </head>
 <body>
-  <p>Open <a href="data/interactive-service-map.html">interactive service map</a>
-    or <a href="../reports/pact-report.html">pact-report.html</a>.</p>
+  <div class="layout">
+    <header>
+      <div>
+        <h1>TaxMesh Contract Test Dashboard</h1>
+        <p class="subtitle" id="headerSubtitle">Pact consumer + provider verification overview</p>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="refreshBtn">Refresh</button>
+        <label class="file-btn secondary">
+          Load JSON
+          <input type="file" id="fileInput" accept="application/json,.json" />
+        </label>
+      </div>
+    </header>
+
+    <section id="emptyState" class="card empty">
+      No report loaded. Run <code>npm run test:contract</code> to refresh <code>dashboard/data/latest.json</code>, open a packaged <code>TaxMesh-Contract-Dashboard</code> zip, or use <strong>Load JSON</strong> to import a report file.
+    </section>
+
+    <div id="dashboard" class="hidden">
+      <section class="status-hero">
+        <div id="overallCard" class="card overall unknown">
+          <div class="overall-ring" id="overallRing">—</div>
+          <div id="generatedAt" class="subtitle">—</div>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">Consumer tests</div>
+            <div class="metric-value" id="consumerScore">0/0</div>
+            <div class="progress passed"><span id="consumerBar" style="width:0%"></span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Provider interactions</div>
+            <div class="metric-value" id="providerScore">0/0</div>
+            <div class="progress passed"><span id="providerBar" style="width:0%"></span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Overall passed</div>
+            <div class="metric-value" id="overallScore">0/0</div>
+            <div class="progress passed"><span id="overallBar" style="width:0%"></span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Failed endpoints</div>
+            <div class="metric-value" id="failedCount">0</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Services OK / failed</div>
+            <div class="metric-value" id="serviceHealth">0/0</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Target URL</div>
+            <div class="metric-value" id="targetUrl" style="font-size:0.95rem;word-break:break-all">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card service-map-section">
+        <h2>Microservice map</h2>
+        <p class="meta">Connected services colored by contract-test health — green = OK, red = failure</p>
+        <div class="service-map-legend" id="mapLegend"></div>
+        <div class="service-map-canvas" id="serviceMapCanvas"></div>
+        <div id="serviceDetail" class="service-detail hidden"></div>
+      </section>
+
+      <section class="grid-2" style="margin-bottom:20px">
+        <div class="card phase-card" id="consumerPhaseCard">
+          <h2>1. Consumer</h2>
+          <p class="meta">Jest tests against Pact mock server</p>
+          <div class="env-list" id="consumerPhaseSummary"></div>
+        </div>
+        <div class="card phase-card" id="providerPhaseCard">
+          <h2>2. Provider</h2>
+          <p class="meta">Live API verification against pact files</p>
+          <div class="env-list" id="providerPhaseSummary"></div>
+        </div>
+      </section>
+
+      <section class="grid-2">
+        <div class="card">
+          <h2>Environment</h2>
+          <p class="meta">Targets used for this verification run</p>
+          <div class="env-list" id="envList"></div>
+        </div>
+        <div class="card">
+          <h2>Summary</h2>
+          <p class="meta">High-level contract health</p>
+          <div class="env-list" id="summaryList"></div>
+        </div>
+      </section>
+
+      <section id="highlightsSection" class="card hidden" style="margin-bottom:20px">
+        <h2>Failure highlights</h2>
+        <p class="meta">Top reasons consumer or provider verification failed</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr><th>Phase</th><th>Endpoint</th><th>Test / interaction</th><th>Expected</th><th>Actual</th></tr>
+            </thead>
+            <tbody id="highlightsTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom:20px">
+        <h2>Consumer contract tests</h2>
+        <p class="meta">Consumer expectations recorded against the Pact mock server</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr><th>Endpoint</th><th>Test</th><th>Suite</th><th>Status</th><th>Reason</th><th>Duration</th></tr>
+            </thead>
+            <tbody id="consumerTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom:20px">
+        <h2>Provider verification</h2>
+        <p class="meta">Live API validated against generated pact files</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr><th>Endpoint</th><th>Interaction</th><th>Status</th><th>Expected</th><th>Actual</th><th>Duration</th></tr>
+            </thead>
+            <tbody id="providerTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="failuresSection" class="card hidden">
+        <h2>Failure details</h2>
+        <p class="meta">Consumer and provider mismatch details</p>
+        <div class="failures" id="failuresList"></div>
+      </section>
+    </div>
+  </div>
+
   <script src="data/latest.js"></script>
+  <script>
+    const emptyState = document.getElementById('emptyState');
+    const dashboard = document.getElementById('dashboard');
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function pct(passed, total) {
+      if (!total) return 0;
+      return Math.round((passed / total) * 100);
+    }
+
+    function formatDate(value) {
+      if (!value) return '—';
+      return new Date(value).toLocaleString();
+    }
+
+    function basename(filePath) {
+      if (!filePath) return '—';
+      const parts = String(filePath).split(/[/\\]/);
+      return parts[parts.length - 1];
+    }
+
+    function badge(status) {
+      const normalized = ['passed', 'failed', 'skipped'].includes(status) ? status : 'unknown';
+      return `<span class="badge ${normalized}">${normalized}</span>`;
+    }
+
+    const MAP_POSITIONS = {
+      Client: { x: 90, y: 230 },
+      Gateway: { x: 250, y: 230 },
+      CLM: { x: 430, y: 80 },
+      MDM: { x: 560, y: 120 },
+      ACC: { x: 680, y: 180 },
+      TAX: { x: 680, y: 280 },
+      ALC: { x: 560, y: 340 },
+      DOC: { x: 430, y: 380 },
+      frontend: { x: 90, y: 230 },
+      gateway: { x: 250, y: 230 },
+    };
+
+    const STATUS_COLOR = {
+      passed: '#22c55e',
+      failed: '#ef4444',
+      skipped: '#f59e0b',
+      unknown: '#64748b',
+    };
+
+    const TOPOLOGY = {
+      nodes: [
+        { id: 'Client', label: 'TaxMesh Client / Pact consumer', shortLabel: 'Client', layer: 'presentation' },
+        { id: 'Gateway', label: 'API Gateway :4100', shortLabel: 'Gateway', layer: 'gateway' },
+        { id: 'CLM', label: 'Client Management', shortLabel: 'CLM', layer: 'service', port: 4101, prefix: '/api/proxy/CLM' },
+        { id: 'MDM', label: 'Master Data', shortLabel: 'MDM', layer: 'service', port: 4102, prefix: '/api/proxy/MDM' },
+        { id: 'ACC', label: 'Accounting', shortLabel: 'ACC', layer: 'service', port: 4103, prefix: '/api/proxy/ACC' },
+        { id: 'TAX', label: 'Tax Computation', shortLabel: 'TAX', layer: 'service', port: 4104, prefix: '/api/proxy/TAX' },
+        { id: 'ALC', label: 'Allocations', shortLabel: 'ALC', layer: 'service', port: 4105, prefix: '/api/proxy/ALC' },
+        { id: 'DOC', label: 'Forms & Documents', shortLabel: 'DOC', layer: 'service', port: 4106, prefix: '/api/proxy/DOC' },
+      ],
+      edges: [
+        { from: 'Client', to: 'Gateway' },
+        { from: 'Gateway', to: 'CLM' },
+        { from: 'Gateway', to: 'MDM' },
+        { from: 'Gateway', to: 'ACC' },
+        { from: 'Gateway', to: 'TAX' },
+        { from: 'Gateway', to: 'ALC' },
+        { from: 'Gateway', to: 'DOC' },
+      ],
+    };
+
+    function serviceIdFromEndpoint(endpoint) {
+      const value = String(endpoint || '');
+      const proxy = //api/proxy/(CLM|MDM|ACC|TAX|ALC|DOC)/i.exec(value);
+      if (proxy) return proxy[1].toUpperCase();
+      const known = ['CLM','MDM','ACC','TAX','ALC','DOC'];
+      for (const id of known) {
+        if (new RegExp('\\b' + id + '\\b', 'i').test(value)) return id;
+      }
+      if (/gateway/i.test(value) || value.includes('/api/health') || value.includes('/api/contracts')) return 'Gateway';
+      return null;
+    }
+
+    function buildServiceMapClient(consumer, provider) {
+      const empty = () => ({ passed: 0, failed: 0, total: 0, skipped: 0 });
+      const services = {};
+      for (const node of TOPOLOGY.nodes) {
+        if (node.layer === 'service' || node.id === 'gateway') {
+          services[node.id] = { ...node, consumer: empty(), provider: empty(), endpoints: [], status: 'unknown', passed: 0, failed: 0, total: 0 };
+        }
+      }
+      const bump = (counts, status) => {
+        if (status === 'passed') counts.passed += 1;
+        else if (status === 'failed') counts.failed += 1;
+        else counts.skipped += 1;
+        counts.total += 1;
+      };
+      for (const test of consumer.tests || []) {
+        const id = serviceIdFromEndpoint(test.endpoint);
+        if (!services[id]) continue;
+        bump(services[id].consumer, test.status);
+        services[id].endpoints.push({ phase: 'consumer', endpoint: test.endpoint, status: test.status, reason: test.reason });
+      }
+      for (const item of provider.interactions || []) {
+        const id = serviceIdFromEndpoint(item.endpoint);
+        if (!services[id]) continue;
+        bump(services[id].provider, item.status);
+        services[id].endpoints.push({ phase: 'provider', endpoint: item.endpoint, status: item.status, expected: item.expected, actual: item.actual });
+      }
+      for (const s of Object.values(services)) {
+        s.failed = s.consumer.failed + s.provider.failed;
+        s.passed = s.consumer.passed + s.provider.passed;
+        s.total = s.consumer.total + s.provider.total;
+        if (provider.ran && s.provider.total > 0) s.status = s.provider.failed ? 'failed' : 'passed';
+        else if (consumer.ran && s.consumer.total > 0) s.status = s.consumer.failed ? 'failed' : 'passed';
+      }
+      const nodes = TOPOLOGY.nodes.map((node) => {
+        const svc = services[node.id];
+        if (svc) return { ...node, ...svc };
+        let status = 'unknown', passed = 0, failed = 0, total = 0;
+        if (node.id === 'Client' && consumer.ran) {
+          status = consumer.failed ? 'failed' : 'passed';
+          passed = consumer.passed || 0; failed = consumer.failed || 0; total = consumer.total || 0;
+        } else if (node.id === 'Gateway' && provider.ran) {
+          const micro = Object.values(services).filter((n) => n.layer === 'service');
+          failed = micro.reduce((sum, n) => sum + n.failed, 0);
+          passed = micro.reduce((sum, n) => sum + n.passed, 0);
+          total = micro.reduce((sum, n) => sum + n.total, 0);
+          status = failed ? 'failed' : total ? 'passed' : 'unknown';
+        }
+        return { ...node, status, passed, failed, total, endpoints: [] };
+      });
+      const edges = TOPOLOGY.edges.map((edge) => {
+        const from = nodes.find((n) => n.id === edge.from);
+        const to = nodes.find((n) => n.id === edge.to);
+        let status = 'unknown';
+        if (from?.status === 'failed' || to?.status === 'failed') status = 'failed';
+        else if (from?.status === 'passed' && to?.status === 'passed') status = 'passed';
+        return { ...edge, status };
+      });
+      const micro = nodes.filter((n) => n.layer === 'service');
+      return {
+        nodes,
+        edges,
+        summary: {
+          healthy: micro.filter((n) => n.status === 'passed').length,
+          failed: micro.filter((n) => n.status === 'failed').length,
+          unknown: micro.filter((n) => n.status === 'unknown').length,
+          total: micro.length,
+        },
+      };
+    }
+
+    function enrichServiceMap(serviceMap) {
+      if (!serviceMap) {
+        return null;
+      }
+      const metaById = Object.fromEntries(TOPOLOGY.nodes.map((node) => [node.id, node]));
+      return {
+        ...serviceMap,
+        nodes: (serviceMap.nodes || []).map((node) => ({
+          ...metaById[node.id],
+          ...node,
+          shortLabel: node.shortLabel || metaById[node.id]?.shortLabel || node.label,
+        })),
+      };
+    }
+
+    let selectedServiceId = null;
+
+    function renderServiceDetail(node) {
+      const panel = document.getElementById('serviceDetail');
+      if (!node) {
+        panel.classList.add('hidden');
+        return;
+      }
+      panel.classList.remove('hidden');
+      const endpoints = (node.endpoints || []).map((ep) => `
+        <div class="endpoint-row">
+          <div><code>${ep.endpoint || '—'}</code> <span style="color:var(--muted)">(${ep.phase})</span></div>
+          ${badge(ep.status)}
+        </div>
+      `).join('') || '<p class="meta">No contract-tested endpoints for this node.</p>';
+
+      panel.innerHTML = `
+        <h3>${node.label} ${badge(node.status)}</h3>
+        <p class="meta">${node.passed}/${node.total} passed · ${node.failed} failed</p>
+        ${node.port ? `<p class="meta">Service port: <code>${node.port}</code></p>` : ''}
+        <div class="endpoint-list">${endpoints}</div>
+      `;
+    }
+
+    function renderServiceMap(serviceMap) {
+      const canvas = document.getElementById('serviceMapCanvas');
+      const legend = document.getElementById('mapLegend');
+      if (!serviceMap?.nodes?.length) {
+        canvas.innerHTML = '<p class="empty">No service map data</p>';
+        return;
+      }
+
+      const summary = serviceMap.summary || {};
+      legend.innerHTML = [
+        ['passed', 'Healthy', summary.healthy || 0],
+        ['failed', 'Failed', summary.failed || 0],
+        ['unknown', 'Untested / unknown', summary.unknown || 0],
+      ].map(([status, label, count]) => `
+        <div class="legend-item"><span class="legend-dot ${status}"></span>${label}: <strong>${count}</strong></div>
+      `).join('');
+
+      const edges = (serviceMap.edges || []).map((edge) => {
+        const from = MAP_POSITIONS[edge.from];
+        const to = MAP_POSITIONS[edge.to];
+        if (!from || !to) return '';
+        const color = STATUS_COLOR[edge.status] || STATUS_COLOR.unknown;
+        return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${color}" stroke-width="2" stroke-dasharray="8,6" opacity="0.8"/>`;
+      }).join('');
+
+      const nodes = serviceMap.nodes.map((node) => {
+        const pos = MAP_POSITIONS[node.id];
+        if (!pos) return '';
+        const color = STATUS_COLOR[node.status] || STATUS_COLOR.unknown;
+        const selected = selectedServiceId === node.id ? 'selected' : '';
+        const count = node.total > 0 ? node.passed : '—';
+        return `
+          <g class="map-node ${node.status} ${selected}" data-id="${node.id}" transform="translate(${pos.x}, ${pos.y})">
+            <circle class="node-ring" r="42" fill="none" stroke="${color}" stroke-width="2"/>
+            <circle r="34" fill="#ffffff" stroke="${color}" stroke-width="4"/>
+            <text text-anchor="middle" y="6" font-size="11" font-weight="600" fill="#374151" font-family="Segoe UI,sans-serif">${node.shortLabel || node.label}</text>
+            <text text-anchor="middle" y="54" font-size="11" fill="${color}" font-weight="700" font-family="Segoe UI,sans-serif">${count}</text>
+          </g>`;
+      }).join('');
+
+      canvas.innerHTML = `<svg viewBox="0 0 780 460" role="img" aria-label="Microservice health map">${edges}${nodes}</svg>`;
+
+      canvas.querySelectorAll('.map-node').forEach((group) => {
+        group.addEventListener('click', () => {
+          selectedServiceId = group.dataset.id;
+          const node = serviceMap.nodes.find((n) => n.id === selectedServiceId);
+          renderServiceMap(serviceMap);
+          renderServiceDetail(node);
+        });
+      });
+    }
+
+    function renderReport(report) {
+      emptyState.classList.add('hidden');
+      dashboard.classList.remove('hidden');
+
+      const overall = report.overallStatus || 'unknown';
+      const overallCard = document.getElementById('overallCard');
+      overallCard.className = `card overall ${overall}`;
+      document.getElementById('overallRing').textContent = overall.toUpperCase();
+      document.getElementById('generatedAt').textContent = `Generated ${formatDate(report.generatedAt)}`;
+
+      const consumer = report.consumer || {};
+      const provider = report.provider || {};
+      const env = report.environment || {};
+      const overallPassed = (consumer.passed || 0) + (provider.passed || 0);
+      const overallFailed = (consumer.failed || 0) + (provider.failed || 0);
+      const overallTotal = (consumer.total || 0) + (provider.total || 0);
+
+      document.getElementById('headerSubtitle').textContent =
+        `Target ${provider.providerBaseUrl || env.providerUrl || 'n/a'} · ${overall.toUpperCase()} · ${formatDate(report.generatedAt)}`;
+
+      document.getElementById('consumerScore').textContent = `${consumer.passed || 0}/${consumer.total || 0}`;
+      document.getElementById('providerScore').textContent = `${provider.passed || 0}/${provider.total || 0}`;
+      document.getElementById('consumerBar').style.width = `${pct(consumer.passed, consumer.total)}%`;
+      document.getElementById('providerBar').style.width = `${pct(provider.passed, provider.total)}%`;
+      document.getElementById('overallScore').textContent = `${overallPassed}/${overallTotal}`;
+      document.getElementById('overallBar').style.width = `${pct(overallPassed, overallTotal)}%`;
+      document.getElementById('failedCount').textContent = String(overallFailed);
+      document.getElementById('targetUrl').textContent = provider.providerBaseUrl || env.providerUrl || 'n/a';
+
+      const serviceMap = enrichServiceMap(report.serviceMap || buildServiceMapClient(consumer, provider));
+      const mapSummary = serviceMap?.summary || {};
+      document.getElementById('serviceHealth').textContent =
+        `${mapSummary.healthy || 0} OK / ${mapSummary.failed || 0} failed`;
+
+      selectedServiceId = null;
+      renderServiceMap(serviceMap);
+      document.getElementById('serviceDetail').classList.add('hidden');
+
+      document.getElementById('envList').innerHTML = [
+        ['Gateway URL', env.GATEWAY_BASE_URL || env.TAXMESH_BASE_URL || env.providerUrl],
+        ['Verification base', provider.providerBaseUrl || env.GATEWAY_BASE_URL],
+        ['Project', 'TaxMesh'],
+        ['Swagger', 'GET /api/contracts (listContracts)'],
+        ['Verification base', provider.providerBaseUrl],
+      ].map(([label, value]) => `
+        <div class="env-item"><span>${label}</span><code>${value || 'n/a'}</code></div>
+      `).join('');
+
+      document.getElementById('summaryList').innerHTML = [
+        ['Consumer ran', consumer.ran ? 'yes' : 'no'],
+        ['Consumer status', consumer.status],
+        ['Provider ran', provider.ran ? 'yes' : 'no'],
+        ['Provider status', provider.status],
+        ['Overall', overall],
+        ['Consumer failed', consumer.failed || 0],
+        ['Provider failed', provider.failed || 0],
+      ].map(([label, value]) => `
+        <div class="env-item"><span>${label}</span><code>${value || 'n/a'}</code></div>
+      `).join('');
+
+      const phaseRow = (label, value, badgeHtml = '') => `
+        <div class="env-item"><span>${label}</span><code>${badgeHtml || value || 'n/a'}</code></div>`;
+
+      document.getElementById('consumerPhaseSummary').innerHTML = [
+        phaseRow('Status', consumer.status, badge(consumer.status)),
+        phaseRow('Executed', consumer.ran ? 'yes' : 'no'),
+        phaseRow('Tests passed', `${consumer.passed || 0}/${consumer.total || 0}`),
+        phaseRow('Failed', consumer.failed || 0),
+      ].join('');
+
+      document.getElementById('providerPhaseSummary').innerHTML = [
+        phaseRow('Status', provider.status, badge(provider.status)),
+        phaseRow('Executed', provider.ran ? 'yes' : 'no'),
+        phaseRow('Interactions passed', `${provider.passed || 0}/${provider.total || 0}`),
+        phaseRow('Verification URL', provider.providerBaseUrl),
+      ].join('');
+
+      document.getElementById('consumerTable').innerHTML = (consumer.tests || []).map((test) => `
+        <tr>
+          <td><code>${test.endpoint || '—'}</code></td>
+          <td>${test.name}</td>
+          <td>${basename(test.suite)}</td>
+          <td>${badge(test.status)}</td>
+          <td>${test.status === 'failed' ? (test.reason || '-') : '—'}</td>
+          <td>${test.durationMs || 0}ms</td>
+        </tr>
+      `).join('') || '<tr><td colspan="6">No consumer results</td></tr>';
+
+      const providerEmpty =
+        provider.ran === false
+          ? (provider.skippedReason || 'Provider verification was not run.')
+          : provider.status === 'passed' && (provider.interactions || []).length === 0 && provider.rawOutput?.length
+            ? provider.rawOutput.join(' ')
+            : 'No provider interaction details available.';
+
+      document.getElementById('providerTable').innerHTML = (provider.interactions || []).map((item) => `
+        <tr>
+          <td><code>${item.endpoint || '—'}</code></td>
+          <td>${item.description}</td>
+          <td>${badge(item.status)}</td>
+          <td>${item.expected || '—'}</td>
+          <td>${item.actual || '—'}</td>
+          <td>${item.duration || '—'}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="6">${providerEmpty}</td></tr>`;
+
+      const highlights = [];
+      for (const failure of consumer.failures || []) {
+        highlights.push({
+          phase: 'Consumer',
+          name: failure.test,
+          endpoint: failure.endpoint || '',
+          expected: '—',
+          actual: failure.reason,
+        });
+      }
+      for (const failure of provider.failures || []) {
+        const expected = (failure.details || [])
+          .map((detail) => detail.path && detail.expected !== undefined
+            ? `${detail.path}: ${JSON.stringify(detail.expected)}`
+            : detail.message || '')
+          .filter(Boolean)
+          .join('; ') || (failure.expectedStatus ? `HTTP ${failure.expectedStatus}` : '—');
+        const actual = (failure.details || [])
+          .map((detail) => detail.path && detail.actual !== undefined
+            ? `${detail.path}: ${JSON.stringify(detail.actual)}`
+            : '')
+          .filter(Boolean)
+          .join('; ') || failure.reason || '—';
+
+        highlights.push({
+          phase: 'Provider',
+          name: failure.interaction,
+          endpoint: failure.endpoint || '',
+          expected,
+          actual,
+        });
+      }
+
+      const highlightsSection = document.getElementById('highlightsSection');
+      if (highlights.length) {
+        highlightsSection.classList.remove('hidden');
+        document.getElementById('highlightsTable').innerHTML = highlights.slice(0, 8).map((item) => `
+          <tr>
+            <td>${escapeHtml(item.phase)}</td>
+            <td><code>${escapeHtml(item.endpoint || '—')}</code></td>
+            <td>${escapeHtml(item.name)}</td>
+            <td>${escapeHtml(item.expected || '—')}</td>
+            <td>${escapeHtml(item.actual || '—')}</td>
+          </tr>
+        `).join('');
+      } else {
+        highlightsSection.classList.add('hidden');
+      }
+
+      const allFailures = [
+        ...(consumer.failures || []).map((failure) => ({
+          title: `Consumer: ${failure.test}`,
+          endpoint: failure.endpoint || '',
+          summary: failure.reason,
+          details: failure.messages?.map((message) => ({ path: 'jest', message })) || [],
+        })),
+        ...(provider.failures || []).map((failure) => ({
+          title: `Provider: ${failure.interaction}`,
+          endpoint: failure.endpoint || '',
+          fullUrl: failure.fullUrl || '',
+          summary: failure.reason,
+          details: failure.details || [],
+        })),
+      ];
+
+      const failuresSection = document.getElementById('failuresSection');
+      if (allFailures.length) {
+        failuresSection.classList.remove('hidden');
+        document.getElementById('failuresList').innerHTML = allFailures.map((failure) => `
+          <div class="failure">
+            <h4>${escapeHtml(failure.title)}</h4>
+            ${failure.endpoint ? `<p><strong>Endpoint:</strong> <code>${escapeHtml(failure.endpoint)}</code></p>` : ''}
+            ${failure.fullUrl ? `<p class="meta">URL: <code>${escapeHtml(failure.fullUrl)}</code></p>` : ''}
+            ${failure.summary ? `<p>${escapeHtml(failure.summary)}</p>` : ''}
+            <table>
+              <thead><tr><th>Field</th><th>Expected</th><th>Actual</th></tr></thead>
+              <tbody>${(failure.details || []).map((detail) => `
+                <tr>
+                  <td>${escapeHtml(detail.path || (detail.expected !== undefined && detail.actual !== undefined ? 'status' : 'body'))}</td>
+                  <td>${escapeHtml(detail.expected !== undefined ? JSON.stringify(detail.expected) : (detail.message || '—'))}</td>
+                  <td>${escapeHtml(detail.actual !== undefined ? JSON.stringify(detail.actual) : '—')}</td>
+                </tr>
+              `).join('') || '<tr><td colspan="3">No detailed mismatch information</td></tr>'}</tbody>
+            </table>
+          </div>
+        `).join('');
+      } else {
+        failuresSection.classList.add('hidden');
+      }
+    }
+
+    function readEmbeddedReport() {
+      const embedded = document.getElementById('pact-report-data');
+      if (!embedded?.textContent?.trim()) {
+        return null;
+      }
+
+      const raw = embedded.textContent.trim();
+      if (embedded.dataset.encoding === 'base64') {
+        return JSON.parse(atob(raw));
+      }
+
+      return JSON.parse(raw);
+    }
+
+    async function fetchReportJson(path) {
+      const response = await fetch(path + '?ts=' + Date.now());
+      if (!response.ok) {
+        return null;
+      }
+      return response.json();
+    }
+
+    async function loadLatest() {
+      const embedded = readEmbeddedReport();
+      if (embedded) {
+        renderReport(embedded);
+        return;
+      }
+
+      if (window.__PACT_REPORT__) {
+        renderReport(window.__PACT_REPORT__);
+        return;
+      }
+
+      for (const reportPath of ['data/latest.json', 'data/report.json']) {
+        try {
+          const report = await fetchReportJson(reportPath);
+          if (report) {
+            renderReport(report);
+            return;
+          }
+        } catch {
+          // try next source
+        }
+      }
+
+      emptyState.classList.remove('hidden');
+      dashboard.classList.add('hidden');
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadLatest);
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      renderReport(JSON.parse(text));
+    });
+
+    loadLatest();
+  </script>
 </body>
 </html>
