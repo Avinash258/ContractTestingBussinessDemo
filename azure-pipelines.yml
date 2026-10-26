@@ -34,12 +34,18 @@ trigger:
     include:
       - main
       - master
+  paths:
+    exclude:
+      - azure-pipelines.yml
 
 pr:
   branches:
     include:
       - main
       - master
+  paths:
+    exclude:
+      - azure-pipelines.yml
 
 pool:
   vmImage: ubuntu-latest
