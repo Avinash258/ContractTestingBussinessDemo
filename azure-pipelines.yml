@@ -51,9 +51,10 @@ variables:
   SMTP_HOST: 'smtp.office365.com'
   SMTP_PORT: '587'
   SMTP_FROM: 'aviansh.sharma@newvision-software.com'
-  # Prefer Run-pipeline UI params; definition variables remain fallbacks in scripts
-  RUNTIME_GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-  RUNTIME_REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
+  # Compile-time from Run-pipeline parameters (do not re-wrap as $(VAR) — that was dropping the URL)
+  GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+  TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+  REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
   SKIP_PROVIDER_IF_NO_GATEWAY: ${{ parameters.skipProviderIfNoGateway }}
 
 stages:
@@ -131,50 +132,48 @@ stages:
 
           - bash: |
               set -euo pipefail
-              # ADO leaves the literal "$(VAR)" when a pipeline variable is unset.
+              # Prefer compile-time parameter (PARAM_*), then job env, then baked-in default.
               normalize() {
                 local v="${1:-}"
+                v="$(echo "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
                 case "$v" in
-                  ''|'$(GATEWAY_BASE_URL)'|'$(TAXMESH_BASE_URL)'|'$(RUNTIME_GATEWAY_BASE_URL)') echo "" ;;
+                  ''|'$(GATEWAY_BASE_URL)'|'$(TAXMESH_BASE_URL)') echo "" ;;
                   *) echo "$v" ;;
                 esac
               }
-              GATEWAY="$(normalize "${RUNTIME_GATEWAY_BASE_URL:-}")"
-              if [ -z "$GATEWAY" ]; then
-                GATEWAY="$(normalize "${GATEWAY_BASE_URL:-}")"
-              fi
-              if [ -z "$GATEWAY" ]; then
-                GATEWAY="$(normalize "${TAXMESH_BASE_URL:-}")"
-              fi
-              # Tolerate pasted URLs with a trailing slash
+              GATEWAY="$(normalize "${PARAM_GATEWAY_BASE_URL:-}")"
+              if [ -z "$GATEWAY" ]; then GATEWAY="$(normalize "${GATEWAY_BASE_URL:-}")"; fi
+              if [ -z "$GATEWAY" ]; then GATEWAY="$(normalize "${TAXMESH_BASE_URL:-}")"; fi
+              if [ -z "$GATEWAY" ]; then GATEWAY="$(normalize "${FALLBACK_GATEWAY_BASE_URL:-}")"; fi
               GATEWAY="${GATEWAY%/}"
 
+              echo "Resolved gateway candidate: '${GATEWAY}'"
               if [ -z "$GATEWAY" ]; then
-                # Default: skip provider on CI pushes (no Run-pipeline UI values).
-                # Set skipProviderIfNoGateway=false on Run pipeline to require a URL.
-                if [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-true}" = "False" ] || [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-true}" = "false" ]; then
-                  echo "##vso[task.logissue type=error]No TaxMesh gateway URL. Fill Run pipeline → 'TaxMesh gateway base URL', or set variable GATEWAY_BASE_URL."
+                if [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-True}" = "False" ] || [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-true}" = "false" ]; then
+                  echo "##vso[task.logissue type=error]No TaxMesh gateway URL. Fill Run pipeline → TaxMesh TARGET URL."
                   exit 1
                 fi
-                echo "##vso[task.logissue type=warning]No gateway URL — skipping provider verification. Re-run with Run pipeline → TaxMesh gateway base URL to verify against a live stack."
+                echo "##vso[task.logissue type=warning]No gateway URL — skipping provider verification."
                 echo "##vso[task.setvariable variable=PROVIDER_SKIPPED]true"
                 exit 0
               fi
 
               echo "##vso[task.setvariable variable=RESOLVED_GATEWAY_BASE_URL]$GATEWAY"
               echo "Pre-check gateway: $GATEWAY/api/health"
-              if ! curl -sf --retry 8 --retry-delay 3 --connect-timeout 10 "$GATEWAY/api/health" | head -c 800; then
+              if ! curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 "$GATEWAY/api/health" | head -c 800; then
                 echo
-                echo "##vso[task.logissue type=error]Gateway health check failed for $GATEWAY/api/health — is TaxMesh reachable from the internet?"
+                echo "##vso[task.logissue type=error]Gateway health check failed for $GATEWAY/api/health"
                 exit 1
               fi
               echo
             displayName: 'Pre-check — TaxMesh gateway health'
             env:
-              RUNTIME_GATEWAY_BASE_URL: $(RUNTIME_GATEWAY_BASE_URL)
-              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
-              TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
-              SKIP_PROVIDER_IF_NO_GATEWAY: $(SKIP_PROVIDER_IF_NO_GATEWAY)
+              # Bake parameter at compile time — avoids empty $(MACRO) expansion bugs
+              PARAM_GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+              FALLBACK_GATEWAY_BASE_URL: 'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
+              GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+              TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+              SKIP_PROVIDER_IF_NO_GATEWAY: ${{ parameters.skipProviderIfNoGateway }}
 
           - script: |
               if [ "${PROVIDER_SKIPPED:-}" = "true" ]; then
@@ -182,13 +181,14 @@ stages:
                 exit 0
               fi
               export GATEWAY_BASE_URL="${RESOLVED_GATEWAY_BASE_URL:-${GATEWAY_BASE_URL:-}}"
+              echo "Provider GATEWAY_BASE_URL=$GATEWAY_BASE_URL"
               npm run test:contract:provider-only
             displayName: 'Run provider verification + generate report'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
               RESOLVED_GATEWAY_BASE_URL: $(RESOLVED_GATEWAY_BASE_URL)
-              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
-              TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
+              GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+              TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
               URL_CLM: $(URL_CLM)
               URL_MDM: $(URL_MDM)
               URL_ACC: $(URL_ACC)
@@ -202,17 +202,8 @@ stages:
 
           - bash: |
               set -euo pipefail
-              normalize_email() {
-                local v="${1:-}"
-                case "$v" in
-                  ''|'$(RUNTIME_REPORT_EMAIL_TO)'|'$(REPORT_EMAIL_TO)') echo "" ;;
-                  *) echo "$v" ;;
-                esac
-              }
-              TO="$(normalize_email "${RUNTIME_REPORT_EMAIL_TO:-}")"
-              if [ -z "$TO" ]; then
-                TO="$(normalize_email "${REPORT_EMAIL_TO:-}")"
-              fi
+              TO="${PARAM_REPORT_EMAIL_TO:-${REPORT_EMAIL_TO:-}}"
+              case "$TO" in ''|'$(REPORT_EMAIL_TO)') TO="" ;; esac
               if [ -z "$TO" ]; then
                 echo "No report email recipient — skipping send."
                 exit 0
@@ -228,8 +219,8 @@ stages:
             condition: succeededOrFailed()
             continueOnError: true
             env:
-              RUNTIME_REPORT_EMAIL_TO: $(RUNTIME_REPORT_EMAIL_TO)
-              REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
+              PARAM_REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
+              REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
               SMTP_USER: $(SMTP_USER)
               SMTP_PASS: $(SMTP_PASS)
               SMTP_HOST: $(SMTP_HOST)
