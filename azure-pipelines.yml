@@ -122,11 +122,16 @@ stages:
               set -euo pipefail
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
+              export PACT_PROVIDER_URL="${GATEWAY_BASE_URL}"
               echo "Provider verify against: $GATEWAY_BASE_URL"
+              echo "CLM via proxy: $GATEWAY_BASE_URL/api/proxy/clm"
               npm run test:contract:provider-only
             displayName: 'Run provider verification + generate report'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
+              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
+              TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
+              PACT_PROVIDER_URL: $(GATEWAY_BASE_URL)
               SMTP_USER: $(SMTP_USER)
               SMTP_PASS: $(SMTP_PASS)
               BUILD_BUILDID: $(Build.BuildId)
