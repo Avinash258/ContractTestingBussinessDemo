@@ -1337,19 +1337,19 @@
       });
     }
 
-    function filterRows(rows, filter, query) {
+    function filterRows(rows, filter, query, extraText = () => '') {
       const q = String(query || '').toLowerCase().trim();
       return rows.filter((row) => {
         const statusOk = filter === 'all' || row.status === filter;
-        const text = `${row.endpoint || ''} ${row.name || ''} ${row.description || ''} ${row.suite || ''}`.toLowerCase();
+        const text = `${row.endpoint || ''} ${row.name || ''} ${row.description || ''} ${row.suite || ''} ${row.path || ''} ${row.pactFile || ''} ${extraText(row)}`.toLowerCase();
         const searchOk = !q || text.includes(q);
         return statusOk && searchOk;
       });
     }
 
-    function renderConsumerTable() {
+    function getConsumerRows() {
       const consumer = currentReport?.consumer || {};
-      const rows = (consumer.tests || []).map((test) => ({
+      return (consumer.tests || []).map((test) => ({
         endpoint: test.endpoint || '—',
         name: test.name || '',
         suite: basename(test.suite),
@@ -1357,39 +1357,87 @@
         reason: test.status === 'failed' ? (test.reason || '-') : '—',
         durationMs: test.durationMs || 0,
       }));
-      const filter = document.getElementById('consumerFilter').value;
-      const query = document.getElementById('consumerSearch').value;
-      const matched = filterRows(rows, filter, query);
-      const visible = matched.slice(0, consumerLimit);
-      document.getElementById('consumerCount').textContent = `Showing ${visible.length} of ${matched.length}`;
-      document.getElementById('consumerLoadMore').classList.toggle('hidden', visible.length >= matched.length);
-      document.getElementById('consumerTable').innerHTML = visible.map((test) => `
-        <tr>
-          <td><code>${escapeHtml(test.endpoint)}</code></td>
-          <td>${escapeHtml(test.name)}</td>
-          <td>${escapeHtml(test.suite)}</td>
-          <td>${badge(test.status)}</td>
-          <td>${escapeHtml(test.reason)}</td>
-          <td>${test.durationMs}ms</td>
-        </tr>
-      `).join('') || '<tr><td colspan="6">No consumer results</td></tr>';
     }
 
-    function renderProviderTable() {
+    function getProviderRows() {
       const provider = currentReport?.provider || {};
-      const rows = (provider.interactions || []).map((item) => ({
+      return (provider.interactions || []).map((item) => ({
         endpoint: item.endpoint || '—',
         description: item.description || '',
         status: item.status,
         expected: item.expected || '—',
         actual: item.actual || '—',
         durationMs: item.durationMs ?? 0,
+        pactFile: item.pactFile || '',
+        consumer: item.consumer || '',
+        provider: item.provider || '',
       }));
+    }
+
+    function getCoverageRows() {
+      const rows = currentReport?.coverage?.rows || [];
+      return rows.map((row) => ({
+        method: String(row.method || '').toUpperCase(),
+        path: row.path || '',
+        status: String(row.status || '').toLowerCase(),
+        notes: row.notes || row.note || '',
+        operation: row.operation || row.operationId || '',
+      }));
+    }
+
+    function getPactFileRows() {
+      const provider = currentReport?.provider || {};
+      const interactions = provider.interactions || [];
+      return (currentReport?.pactFiles || []).map((file) => {
+        const matching = interactions.filter((ix) => ix.pactFile === file);
+        const consumerName =
+          matching[0]?.consumer ||
+          String(file).replace(/\.json$/i, '').split('-TaxMesh-')[0] ||
+          '';
+        const providerName =
+          matching[0]?.provider ||
+          (String(file).includes('-TaxMesh-')
+            ? `TaxMesh-${String(file).split('-TaxMesh-').pop()?.replace(/\.json$/i, '')}`
+            : '');
+        return { file, consumer: consumerName, provider: providerName, interactions: matching.length };
+      });
+    }
+
+    function renderConsumerTable() {
+      const filter = document.getElementById('consumerFilter').value;
+      const query = document.getElementById('consumerSearch').value;
+      writeHashFilters({ cStatus: filter, cQ: query });
+      let matched = filterRows(getConsumerRows(), filter, query);
+      const sort = sortState.consumer;
+      matched = sortRows(matched, sort.key, sort.dir);
+      const visible = matched.slice(0, consumerLimit);
+      document.getElementById('consumerCount').textContent = `Showing ${visible.length} of ${matched.length}`;
+      document.getElementById('consumerLoadMore').classList.toggle('hidden', visible.length >= matched.length);
+      document.getElementById('consumerTable').innerHTML = visible.map((test) => `
+        <tr class="${test.status === 'failed' ? 'fail-row' : ''}">
+          <td>${endpointHtml(test.endpoint)}</td>
+          <td>${escapeHtml(test.name)}</td>
+          <td>${escapeHtml(test.suite)}</td>
+          <td>${badge(test.status)}</td>
+          <td>${escapeHtml(test.reason)}</td>
+          <td>${durationHtml(test.durationMs, 'consumer')}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="6">No consumer results</td></tr>';
+    }
+
+    function renderProviderTable() {
+      const provider = currentReport?.provider || {};
       const filter = document.getElementById('providerFilter').value;
       const query = document.getElementById('providerSearch').value;
-      const matched = filterRows(rows, filter, query);
+      writeHashFilters({ pStatus: filter, pQ: query, pact: providerPactFilter });
+      let matched = filterRows(getProviderRows(), filter, query);
+      if (providerPactFilter) {
+        matched = matched.filter((row) => row.pactFile === providerPactFilter);
+      }
+      const sort = sortState.provider;
+      matched = sortRows(matched, sort.key, sort.dir);
       const visible = matched.slice(0, providerLimit);
-      document.getElementById('providerCount').textContent = `Showing ${visible.length} of ${matched.length}`;
+      document.getElementById('providerCount').textContent = `Showing ${visible.length} of ${matched.length}${providerPactFilter ? ` · pact ${providerPactFilter}` : ''}`;
       document.getElementById('providerLoadMore').classList.toggle('hidden', visible.length >= matched.length);
 
       const providerEmpty =
@@ -1398,15 +1446,58 @@
           : 'No provider interaction details available.';
 
       document.getElementById('providerTable').innerHTML = visible.map((item) => `
-        <tr>
-          <td><code>${escapeHtml(item.endpoint)}</code></td>
+        <tr class="${item.status === 'failed' ? 'fail-row' : ''}">
+          <td>${endpointHtml(item.endpoint)}</td>
           <td>${escapeHtml(item.description)}</td>
           <td>${badge(item.status)}</td>
           <td>${escapeHtml(item.expected)}</td>
           <td>${escapeHtml(item.actual)}</td>
-          <td>${item.durationMs}ms</td>
+          <td>${durationHtml(item.durationMs, 'provider')}</td>
         </tr>
       `).join('') || `<tr><td colspan="6">${escapeHtml(providerEmpty)}</td></tr>`;
+    }
+
+    function renderCoverageTable() {
+      const section = document.getElementById('coverageSection');
+      const rows = getCoverageRows();
+      if (!rows.length) {
+        section.classList.add('hidden');
+        return;
+      }
+      section.classList.remove('hidden');
+      const covered = rows.filter((r) => r.status === 'covered').length;
+      const partial = rows.filter((r) => r.status === 'partial').length;
+      const deferred = rows.filter((r) => r.status === 'deferred').length;
+      const coveragePct = rows.length
+        ? Math.round(((covered + partial * 0.5) / rows.length) * 1000) / 10
+        : 0;
+      document.getElementById('coverageChips').innerHTML = `
+        <span class="chip">Covered ${covered}</span>
+        <span class="chip">Partial ${partial}</span>
+        <span class="chip">Deferred ${deferred}</span>
+        <span class="chip">Coverage ${coveragePct}%</span>`;
+      document.getElementById('coverageSectionBadge').innerHTML =
+        `${badge('covered')} <span class="meta">${covered}/${rows.length}</span>`;
+
+      const statusFilter = document.getElementById('coverageFilter').value;
+      const methodFilter = document.getElementById('coverageMethodFilter').value;
+      const query = document.getElementById('coverageSearch').value;
+      writeHashFilters({ covStatus: statusFilter, covMethod: methodFilter, covQ: query });
+      let matched = filterRows(rows, statusFilter, query, (r) => `${r.notes} ${r.operation}`);
+      if (methodFilter !== 'all') matched = matched.filter((r) => r.method === methodFilter);
+      matched = sortRows(matched, sortState.coverage.key, sortState.coverage.dir);
+      const visible = matched.slice(0, coverageLimit);
+      document.getElementById('coverageCount').textContent = `Showing ${visible.length} of ${matched.length}`;
+      document.getElementById('coverageLoadMore').classList.toggle('hidden', visible.length >= matched.length);
+      document.getElementById('coverageTable').innerHTML = visible.map((row) => `
+        <tr>
+          <td>${methodPill(row.method) || escapeHtml(row.method)}</td>
+          <td><code class="endpoint-cell">${escapeHtml(row.path)}</code><button type="button" class="copy-btn" data-copy="${escapeHtml(row.path)}" aria-label="Copy path">Copy</button></td>
+          <td>${badge(row.status)}</td>
+          <td>${escapeHtml(row.operation || '—')}</td>
+          <td>${escapeHtml(row.notes || '—')}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="5">No coverage rows</td></tr>';
     }
 
     function setSectionOpen(id, open) {
@@ -1422,13 +1513,51 @@
         .replace(/"/g, '&quot;');
     }
 
-    function sheetXml(name, headers, rows) {
-      const headerRow = `<Row>${headers.map((h) => `<Cell><Data ss:Type="String">${xmlEscape(h)}</Data></Cell>`).join('')}</Row>`;
-      const body = rows.map((row) => `<Row>${row.map((cell) => {
-        const isNum = typeof cell === 'number' && Number.isFinite(cell);
-        return `<Cell><Data ss:Type="${isNum ? 'Number' : 'String'}">${xmlEscape(cell)}</Data></Cell>`;
-      }).join('')}</Row>`).join('');
-      return `<Worksheet ss:Name="${xmlEscape(name)}"><Table>${headerRow}${body}</Table></Worksheet>`;
+    const EXCEL_STYLES = `
+<Styles>
+  <Style ss:ID="Default"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="11"/></Style>
+  <Style ss:ID="Header"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="HeaderFail"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#7F1D1D" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Wrap"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+  <Style ss:ID="Num"><Alignment ss:Horizontal="Right" ss:Vertical="Top"/><NumberFormat ss:Format="#,##0"/></Style>
+  <Style ss:ID="passed"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#166534"/><Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="failed"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#991B1B"/><Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="skipped"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#92400E"/><Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="unknown"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#92400E"/><Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="covered"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#166534"/><Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="deferred"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#3730A3"/><Interior ss:Color="#E0E7FF" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="partial"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1" ss:Color="#9A3412"/><Interior ss:Color="#FFEDD5" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="FailRow"><Interior ss:Color="#FEF2F2" ss:Pattern="Solid"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+</Styles>`;
+
+    function statusStyleId(status) {
+      const s = String(status || '').toLowerCase();
+      return ['passed', 'failed', 'skipped', 'unknown', 'covered', 'deferred', 'partial'].includes(s) ? s : 'unknown';
+    }
+
+    function sheetXml(name, headers, rows, opts = {}) {
+      const widths = opts.widths || headers.map(() => 80);
+      const statusCols = new Set(opts.statusCols || []);
+      const numberCols = new Set(opts.numberCols || []);
+      const failRows = opts.failRowWhenStatusCol;
+      const cols = widths.map((w) => `<Column ss:Width="${w}"/>`).join('');
+      const headerStyle = opts.failHeader ? 'HeaderFail' : 'Header';
+      const headerRow = `<Row ss:Height="24">${headers.map((h) => `<Cell ss:StyleID="${headerStyle}"><Data ss:Type="String">${xmlEscape(h)}</Data></Cell>`).join('')}</Row>`;
+      const body = rows.map((row) => {
+        const statusVal = failRows != null ? String(row[failRows] || '').toLowerCase() : '';
+        const rowFailed = statusVal === 'failed';
+        return `<Row>${row.map((cell, idx) => {
+          const isNum = typeof cell === 'number' && Number.isFinite(cell);
+          let style = numberCols.has(idx) ? 'Num' : 'Wrap';
+          if (statusCols.has(idx)) style = statusStyleId(cell);
+          else if (rowFailed) style = 'FailRow';
+          return `<Cell ss:StyleID="${style}"><Data ss:Type="${isNum ? 'Number' : 'String'}">${xmlEscape(cell)}</Data></Cell>`;
+        }).join('')}</Row>`;
+      }).join('');
+      const lastCol = String.fromCharCode(64 + Math.min(headers.length, 26));
+      const filter = opts.autofilter === false ? '' : `<AutoFilter x:Range="R1C1:R1C${headers.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/>`;
+      const freeze = `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane>${opts.freezeFirstCol ? '<SplitVertical>1</SplitVertical><LeftColumnRightPane>1</LeftColumnRightPane>' : ''}<ActivePane>2</ActivePane></WorksheetOptions>`;
+      return `<Worksheet ss:Name="${xmlEscape(name)}"><Table>${cols}${headerRow}${body}</Table>${filter}${freeze}</Worksheet>`;
     }
 
     function buildClientExcel(report) {
@@ -1436,33 +1565,92 @@
       const provider = report.provider || {};
       const env = report.environment || {};
       const target = provider.providerBaseUrl || env.GATEWAY_BASE_URL || env.providerUrl || 'n/a';
+      const coverage = (report.coverage?.rows || []).map((r) => [
+        r.method || '', r.path || '', r.status || '', r.notes || r.note || '', r.operation || r.operationId || '',
+      ]);
+      const pactRows = getPactFileRows().map((r) => [r.file, r.consumer, r.provider, r.interactions]);
+      const failureRows = [];
+      for (const f of consumer.failures || []) {
+        failureRows.push(['Consumer', f.endpoint || '', f.test || '', 'Pass', f.reason || '', '', '', 'Check consumer expectation']);
+      }
+      for (const f of provider.failures || []) {
+        failureRows.push(['Provider', f.endpoint || '', f.interaction || '', '', f.reason || '', '', '', 'Check provider state setup']);
+      }
+      for (const ix of provider.interactions || []) {
+        if (ix.status !== 'failed') continue;
+        failureRows.push(['Provider', ix.endpoint || '', ix.description || '', ix.expected || '', ix.actual || '', '', ix.pactFile || '', 'Check contract schema change']);
+      }
+      const slowConsumer = [...(consumer.tests || [])].sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0)).slice(0, 10);
+      const slowProvider = [...(provider.interactions || [])].sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0)).slice(0, 10);
       const sheets = [
         sheetXml('Summary', ['Field', 'Value'], [
           ['Project', report.project],
           ['Generated At', report.generatedAt],
           ['Overall Status', report.overallStatus],
-          ['Consumer', `${consumer.passed}/${consumer.total}`],
-          ['Provider', `${provider.passed}/${provider.total}`],
+          ['Consumer Status', consumer.status],
+          ['Consumer Passed', consumer.passed || 0],
+          ['Consumer Failed', consumer.failed || 0],
+          ['Consumer Total', consumer.total || 0],
+          ['Consumer Duration Ms', consumer.durationMs || 0],
+          ['Provider Status', provider.status],
+          ['Provider Passed', provider.passed || 0],
+          ['Provider Failed', provider.failed || 0],
+          ['Provider Total', provider.total || 0],
+          ['Provider Duration Ms', provider.durationMs || 0],
           ['Target URL', target],
           ['Build ID', env.BUILD_BUILDID || ''],
           ['Branch', env.BUILD_SOURCEBRANCH || ''],
-          ['Commit', env.BUILD_SOURCEVERSION || ''],
-        ]),
+          ['Commit', env.BUILD_SOURCEVERSION || 'Not provided'],
+          ['Pact Files', (report.pactFiles || []).length],
+        ], { widths: [120, 280], statusCols: [], autofilter: false }),
         sheetXml('Service Health', ['Service', 'Layer', 'Status', 'Passed', 'Failed', 'Total'],
-          (report.serviceMap?.nodes || []).map((n) => [n.id, n.layer || '', n.status, n.passed, n.failed, n.total])),
+          (report.serviceMap?.nodes || []).map((n) => [n.id, n.layer || '', n.status, n.passed, n.failed, n.total]),
+          { widths: [70, 70, 60, 50, 50, 50], statusCols: [2], numberCols: [3, 4, 5] }),
         sheetXml('CT Matrix', ['CT ID', 'From', 'To', 'Status'],
-          (report.serviceMap?.contractEdges || []).map((e) => [e.id || '', e.from, e.to, e.status || ''])),
-        sheetXml('Consumer Tests', ['Suite', 'Name', 'Endpoint', 'Status', 'DurationMs', 'Reason'],
-          (consumer.tests || []).map((t) => [basename(t.suite), t.name, t.endpoint || '', t.status, t.durationMs || 0, t.status === 'failed' ? (t.reason || '') : ''])),
-        sheetXml('Provider Interactions', ['Provider', 'Description', 'Endpoint', 'Status', 'Expected', 'Actual', 'DurationMs'],
-          (provider.interactions || []).map((i) => [i.provider || '', i.description || '', i.endpoint || '', i.status, i.expected || '', i.actual || '', i.durationMs || 0])),
-        sheetXml('Pact Files', ['File'], (report.pactFiles || []).map((f) => [f])),
-        sheetXml('Environment', ['Key', 'Value'], Object.entries(env)),
+          (report.serviceMap?.contractEdges || []).map((e) => [e.id || '', e.from, e.to, e.status || '']),
+          { widths: [50, 60, 60, 60], statusCols: [3] }),
+        sheetXml('Consumer Tests', ['Suite', 'Name', 'Endpoint', 'Method', 'Status', 'DurationMs', 'Reason'],
+          (consumer.tests || []).map((t) => {
+            const ep = t.endpoint || '';
+            const m = String(ep).match(/^(GET|POST|PUT|PATCH|DELETE)\b/i);
+            return [basename(t.suite), t.name, ep, m ? m[1].toUpperCase() : '', t.status, t.durationMs || 0, t.status === 'failed' ? (t.reason || '') : '-'];
+          }),
+          { widths: [160, 240, 170, 45, 55, 55, 240], statusCols: [4], numberCols: [5], freezeFirstCol: true, failRowWhenStatusCol: 4 }),
+        sheetXml('Provider Interactions', ['Provider', 'Consumer', 'PactFile', 'Description', 'Endpoint', 'Status', 'Expected', 'Actual', 'Mismatch Detail', 'DurationMs'],
+          (provider.interactions || []).map((i) => {
+            const mismatch = (i.expected || '') !== (i.actual || '') && i.status === 'failed'
+              ? `status/expected: ${i.expected || ''}\nstatus/actual: ${i.actual || ''}`
+              : '';
+            return [i.provider || '', i.consumer || '', i.pactFile || '', i.description || '', i.endpoint || '', i.status, i.expected || '', i.actual || '', mismatch, i.durationMs || 0];
+          }),
+          { widths: [80, 80, 150, 240, 160, 55, 100, 100, 240, 55], statusCols: [5], numberCols: [9], freezeFirstCol: true, failRowWhenStatusCol: 5 }),
+        sheetXml('Failures', ['Phase', 'Endpoint', 'Name', 'Expected', 'Actual', 'Details', 'Pact File', 'Suggested Next Step'],
+          failureRows.length ? failureRows : [['No failures - all contracts verified', '', '', '', '', '', '', '']],
+          { widths: [60, 160, 160, 100, 100, 240, 150, 160], failHeader: true }),
+        sheetXml('Pact Files', ['FileName', 'Consumer', 'Provider', 'Interactions'], pactRows,
+          { widths: [180, 100, 100, 60], numberCols: [3] }),
+        sheetXml('Top Slow', ['Phase', 'Endpoint', 'Name', 'DurationMs', 'Status'], [
+          ...slowConsumer.map((t) => ['Consumer', t.endpoint || '', t.name || '', t.durationMs || 0, t.status]),
+          ...slowProvider.map((t) => ['Provider', t.endpoint || '', t.description || '', t.durationMs || 0, t.status]),
+        ], { widths: [60, 160, 240, 55, 55], statusCols: [4], numberCols: [3] }),
+        sheetXml('Environment', ['Key', 'Value'], Object.entries(env),
+          { widths: [120, 320], autofilter: false }),
+        sheetXml('Coverage', ['Method', 'Path', 'Status', 'Notes', 'Operation'], coverage,
+          { widths: [50, 210, 55, 280, 120], statusCols: [2], freezeFirstCol: true }),
+        sheetXml('Legend', ['Colour swatch', 'Meaning', 'Where used'], [
+          ['passed/covered', 'Green OK', 'Status columns'],
+          ['failed', 'Red broken', 'Status / Failures'],
+          ['skipped/unknown', 'Amber', 'Status columns'],
+          ['deferred', 'Indigo', 'Coverage'],
+          ['partial', 'Orange', 'Coverage uploads'],
+          ['duration', 'Green→yellow→red', 'DurationMs scales'],
+        ], { widths: [90, 160, 180], autofilter: false }),
       ];
       return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+${EXCEL_STYLES}
 ${sheets.join('\n')}
 </Workbook>`;
     }
@@ -1498,6 +1686,7 @@ ${sheets.join('\n')}
       a.download = 'TaxMesh-Contract-Report.xls';
       a.click();
       URL.revokeObjectURL(url);
+      showToast('Styled Excel generated in the browser. For the full workbook run npm run test:contract');
     }
 
     function renderReport(report) {
@@ -1513,6 +1702,11 @@ ${sheets.join('\n')}
       overallCard.style.marginBottom = '0';
       document.getElementById('overallRing').textContent = overall.toUpperCase();
       document.getElementById('generatedAt').textContent = `Generated ${formatDate(report.generatedAt)}`;
+      const lastRun = document.getElementById('lastRunMeta');
+      if (lastRun) {
+        lastRun.textContent = `Last run: ${relativeTime(report.generatedAt)}`;
+        lastRun.title = formatDate(report.generatedAt);
+      }
 
       const consumer = report.consumer || {};
       const provider = report.provider || {};
@@ -1520,6 +1714,7 @@ ${sheets.join('\n')}
       const overallPassed = (consumer.passed || 0) + (provider.passed || 0);
       const overallFailed = (consumer.failed || 0) + (provider.failed || 0);
       const overallTotal = (consumer.total || 0) + (provider.total || 0);
+      const totalDurationMs = (consumer.durationMs || 0) + (provider.durationMs || 0);
 
       const target =
         provider.providerBaseUrl ||
@@ -1566,16 +1761,21 @@ ${sheets.join('\n')}
         ['TAX URL', env.URL_TAX],
         ['ALC URL', env.URL_ALC],
         ['DOC URL', env.URL_DOC],
-        ['Build ID', env.BUILD_BUILDID],
-        ['Branch', env.BUILD_SOURCEBRANCH],
-        ['Commit', env.BUILD_SOURCEVERSION],
-        ['Run mode', env.RUN_MODE],
+        ['Build ID', displayOrNotProvided(env.BUILD_BUILDID)],
+        ['Branch', displayOrNotProvided(env.BUILD_SOURCEBRANCH)],
+        ['Commit', displayOrNotProvided(env.BUILD_SOURCEVERSION)],
+        ['Run mode', displayOrNotProvided(env.RUN_MODE)],
+        ['Consumer duration', `${consumer.durationMs || 0} ms`],
+        ['Provider duration', `${provider.durationMs || 0} ms`],
+        ['Total duration', `${(totalDurationMs / 1000).toFixed(2)} s`],
         ['Consumer', env.consumer || 'TaxMesh Pact consumers'],
         ['Provider', env.provider || 'TaxMesh APIs'],
         ['Verification base', provider.providerBaseUrl || target],
-      ].map(([label, value]) => `
-        <div class="env-item"><span>${label}</span><code>${escapeHtml(value || 'n/a')}</code></div>
-      `).join('');
+      ].map(([label, value]) => {
+        const isUrl = /URL|base/i.test(label) && String(value || '').startsWith('http');
+        const shown = escapeHtml(value || 'n/a');
+        return `<div class="env-item"><span>${label}</span><code>${shown}${isUrl ? `<button type="button" class="copy-btn" data-copy="${shown}" aria-label="Copy URL">Copy</button>` : ''}</code></div>`;
+      }).join('');
 
       const ctEdges = serviceMap?.contractEdges || report.serviceMap?.contractEdges || [];
       const ctSection = document.getElementById('ctMatrixSection');
