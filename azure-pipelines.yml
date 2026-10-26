@@ -15,9 +15,10 @@
 # These fields appear in Azure DevOps → Pipelines → Run pipeline (NOT from the YAML editor Run).
 parameters:
   - name: gatewayBaseUrl
-    displayName: '1) TaxMesh TARGET URL (paste before run) — e.g. https://xxxx.ngrok-free.app'
+    displayName: '1) TaxMesh TARGET URL (update when Cloudflare/ngrok URL changes)'
     type: string
-    default: ''
+    # Current tunnel — override on Run pipeline when it rotates
+    default: 'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
 
   - name: reportEmailTo
     displayName: '2) Report email TO (HTML results)'
@@ -27,7 +28,7 @@ parameters:
   - name: skipProviderIfNoGateway
     displayName: '3) Skip provider if TARGET URL is empty'
     type: boolean
-    default: true
+    default: false
 
 trigger:
   branches:
@@ -145,6 +146,8 @@ stages:
               if [ -z "$GATEWAY" ]; then
                 GATEWAY="$(normalize "${TAXMESH_BASE_URL:-}")"
               fi
+              # Tolerate pasted URLs with a trailing slash
+              GATEWAY="${GATEWAY%/}"
 
               if [ -z "$GATEWAY" ]; then
                 # Default: skip provider on CI pushes (no Run-pipeline UI values).
