@@ -169,28 +169,32 @@ stages:
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
               PACT_PROVIDER_URL: $(GATEWAY_BASE_URL)
-              SMTP_USER: $(SMTP_USER)
-              SMTP_PASS: $(SMTP_PASS)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
 
+          # Host/user pinned to Gmail so ADO library vars (e.g. smtp.office365.com) cannot override.
+          # Only SMTP_PASS comes from a secret pipeline variable (Gmail App Password).
           - script: |
-              if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
-                echo "SMTP_USER or SMTP_PASS not set — skipping email report."
+              set -euo pipefail
+              if [ -z "${SMTP_PASS:-}" ]; then
+                echo "SMTP_PASS not set — skipping email report. Add secret variable SMTP_PASS = Gmail App Password."
                 exit 0
               fi
+              # Collapse empty entries from pasted "a,,b" recipient lists
+              REPORT_EMAIL_TO="$(echo "${REPORT_EMAIL_TO}" | tr ',' '\n' | sed '/^[[:space:]]*$/d' | paste -sd, -)"
+              echo "SMTP: ${SMTP_HOST} as ${SMTP_USER}"
               echo "Sending HTML report to: ${REPORT_EMAIL_TO}"
               npm run send-report
             displayName: 'Email HTML report'
             condition: succeededOrFailed()
             continueOnError: true
             env:
-              SMTP_USER: $(SMTP_USER)
+              SMTP_HOST: 'smtp.gmail.com'
+              SMTP_PORT: '587'
+              SMTP_USER: 'avinashazureemail@gmail.com'
+              SMTP_FROM: 'avinashazureemail@gmail.com'
               SMTP_PASS: $(SMTP_PASS)
-              SMTP_HOST: $(SMTP_HOST)
-              SMTP_PORT: $(SMTP_PORT)
-              SMTP_FROM: $(SMTP_FROM)
               REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)

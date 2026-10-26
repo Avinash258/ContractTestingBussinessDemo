@@ -29,7 +29,11 @@ export async function sendReportEmail(options?: {
   }
 
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as PactReport;
-  const to = process.env.REPORT_EMAIL_TO || process.env.SMTP_TO;
+  const to = String(process.env.REPORT_EMAIL_TO || process.env.SMTP_TO || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(', ');
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = Number(process.env.SMTP_PORT || 587);
   const user = String(process.env.SMTP_USER || '').trim();
