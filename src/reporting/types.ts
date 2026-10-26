@@ -67,7 +67,10 @@ export interface PactReport {
   pactFiles: string[];
   serviceMap: {
     nodes: ServiceMapNode[];
+    /** FinVault-style star topology only (Client → Gateway → services). Drawn on the map. */
     edges: Array<{ from: string; to: string; id?: string; status?: PhaseStatus }>;
+    /** CT-00…CT-17 producer→consumer edges (matrix table, not drawn on the map). */
+    contractEdges?: Array<{ from: string; to: string; id?: string; status?: PhaseStatus }>;
     summary?: { healthy: number; failed: number; unknown: number };
   };
   phases?: {

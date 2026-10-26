@@ -192,9 +192,17 @@ async function main() {
     provider: providerSummary,
     pactFiles: listPactFiles(),
     environment: {
+      // FinVault-style friendly keys + TaxMesh service bases
+      providerUrl: process.env.GATEWAY_BASE_URL || config.gatewayBaseUrl,
       GATEWAY_BASE_URL: process.env.GATEWAY_BASE_URL || config.gatewayBaseUrl,
       URL_CLM: process.env.URL_CLM || config.serviceBaseUrl('CLM'),
       URL_MDM: process.env.URL_MDM || config.serviceBaseUrl('MDM'),
+      URL_ACC: process.env.URL_ACC || config.serviceBaseUrl('ACC'),
+      URL_TAX: process.env.URL_TAX || config.serviceBaseUrl('TAX'),
+      URL_ALC: process.env.URL_ALC || config.serviceBaseUrl('ALC'),
+      URL_DOC: process.env.URL_DOC || config.serviceBaseUrl('DOC'),
+      consumer: 'TaxMesh Pact consumers',
+      provider: 'TaxMesh APIs (Gateway + CLM…DOC)',
       BUILD_BUILDID: process.env.BUILD_BUILDID || '',
       BUILD_SOURCEBRANCH: process.env.BUILD_SOURCEBRANCH || '',
     },

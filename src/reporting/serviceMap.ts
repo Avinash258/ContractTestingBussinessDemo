@@ -95,7 +95,8 @@ export function buildTaxMeshServiceMap(consumer: PhaseSummary, provider: PhaseSu
     })),
   ];
 
-  const edgeDefs = [
+  // FinVault-style map: star topology only (presentation → gateway → services)
+  const topologyDefs = [
     { from: 'Client', to: 'Gateway' },
     { from: 'Gateway', to: 'CLM' },
     { from: 'Gateway', to: 'MDM' },
@@ -103,19 +104,25 @@ export function buildTaxMeshServiceMap(consumer: PhaseSummary, provider: PhaseSu
     { from: 'Gateway', to: 'TAX' },
     { from: 'Gateway', to: 'ALC' },
     { from: 'Gateway', to: 'DOC' },
-    ...CONTRACTS.map((c) => ({ from: c.producer, to: c.consumer, id: c.id })),
   ];
+  // CT matrix edges — shown in dashboard table, not on the SVG map
+  const contractDefs = CONTRACTS.map((c) => ({
+    from: c.producer,
+    to: c.consumer,
+    id: c.id,
+  }));
 
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-  const edges = edgeDefs.map((e) => {
-    const from = byId[e.from];
-    const to = byId[e.to];
-    let status: PhaseStatus = STATUS.unknown;
-    if (from?.status === 'failed' || to?.status === 'failed') status = 'failed';
-    else if (from?.status === 'passed' && to?.status === 'passed') status = 'passed';
-    else if (from?.total || to?.total) status = 'passed';
-    return { ...e, status };
-  });
+  const statusForEdge = (fromId: string, toId: string): PhaseStatus => {
+    const from = byId[fromId];
+    const to = byId[toId];
+    if (from?.status === 'failed' || to?.status === 'failed') return 'failed';
+    if (from?.status === 'passed' && to?.status === 'passed') return 'passed';
+    if (from?.total || to?.total) return 'passed';
+    return STATUS.unknown;
+  };
+  const edges = topologyDefs.map((e) => ({ ...e, status: statusForEdge(e.from, e.to) }));
+  const contractEdges = contractDefs.map((e) => ({ ...e, status: statusForEdge(e.from, e.to) }));
 
   const serviceNodes = nodes.filter((n) => n.layer === 'service' || n.layer === 'gateway');
   const summary = {
@@ -124,7 +131,7 @@ export function buildTaxMeshServiceMap(consumer: PhaseSummary, provider: PhaseSu
     unknown: serviceNodes.filter((n) => n.status === 'unknown' || n.status === 'skipped').length,
   };
 
-  return { nodes, edges, summary };
+  return { nodes, edges, contractEdges, summary };
 }
 
 /** SVG positions for TaxMesh map (EY_Demo layout style). */

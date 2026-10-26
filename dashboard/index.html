@@ -449,10 +449,23 @@
 
       <section class="card service-map-section">
         <h2>Microservice map</h2>
-        <p class="meta">Connected services colored by contract-test health — green = OK, red = failure</p>
+        <p class="meta">Client → Gateway → services, colored by contract-test health — green = OK, red = failure</p>
         <div class="service-map-legend" id="mapLegend"></div>
         <div class="service-map-canvas" id="serviceMapCanvas"></div>
         <div id="serviceDetail" class="service-detail hidden"></div>
+      </section>
+
+      <section id="ctMatrixSection" class="card hidden" style="margin-bottom:20px">
+        <h2>CT matrix (CT-00…CT-17)</h2>
+        <p class="meta">Producer → consumer contract edges (shown here, not on the map — FinVault-style clean topology)</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr><th>CT id</th><th>From</th><th>To</th><th>Status</th></tr>
+            </thead>
+            <tbody id="ctMatrixTable"></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="grid-2" style="margin-bottom:20px">
@@ -620,7 +633,7 @@
       const empty = () => ({ passed: 0, failed: 0, total: 0, skipped: 0 });
       const services = {};
       for (const node of TOPOLOGY.nodes) {
-        if (node.layer === 'service' || node.id === 'gateway') {
+        if (node.layer === 'service' || node.layer === 'gateway') {
           services[node.id] = { ...node, consumer: empty(), provider: empty(), endpoints: [], status: 'unknown', passed: 0, failed: 0, total: 0 };
         }
       }
@@ -693,6 +706,7 @@
       const metaById = Object.fromEntries(TOPOLOGY.nodes.map((node) => [node.id, node]));
       return {
         ...serviceMap,
+        contractEdges: serviceMap.contractEdges || [],
         nodes: (serviceMap.nodes || []).map((node) => ({
           ...metaById[node.id],
           ...node,
@@ -742,12 +756,15 @@
         <div class="legend-item"><span class="legend-dot ${status}"></span>${label}: <strong>${count}</strong></div>
       `).join('');
 
-      const edges = (serviceMap.edges || []).map((edge) => {
+      // FinVault-style: only star topology edges on the canvas (skip CT-* mesh edges)
+      const mapEdges = (serviceMap.edges || []).filter((edge) => !edge.id || !/^CT-/i.test(String(edge.id)));
+      const edges = mapEdges.map((edge) => {
         const from = MAP_POSITIONS[edge.from];
         const to = MAP_POSITIONS[edge.to];
         if (!from || !to) return '';
         const color = STATUS_COLOR[edge.status] || STATUS_COLOR.unknown;
-        return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${color}" stroke-width="2" stroke-dasharray="8,6" opacity="0.8"/>`;
+        const dash = edge.status === 'failed' ? '6,4' : '8,6';
+        return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${color}" stroke-width="2" stroke-dasharray="${dash}" opacity="0.85"/>`;
       }).join('');
 
       const nodes = serviceMap.nodes.map((node) => {
@@ -794,8 +811,15 @@
       const overallFailed = (consumer.failed || 0) + (provider.failed || 0);
       const overallTotal = (consumer.total || 0) + (provider.total || 0);
 
+      const target =
+        provider.providerBaseUrl ||
+        env.providerUrl ||
+        env.GATEWAY_BASE_URL ||
+        env.TAXMESH_BASE_URL ||
+        'n/a';
+
       document.getElementById('headerSubtitle').textContent =
-        `Target ${provider.providerBaseUrl || env.providerUrl || 'n/a'} · ${overall.toUpperCase()} · ${formatDate(report.generatedAt)}`;
+        `Target ${target} · ${overall.toUpperCase()} · ${formatDate(report.generatedAt)}`;
 
       document.getElementById('consumerScore').textContent = `${consumer.passed || 0}/${consumer.total || 0}`;
       document.getElementById('providerScore').textContent = `${provider.passed || 0}/${provider.total || 0}`;
@@ -804,7 +828,7 @@
       document.getElementById('overallScore').textContent = `${overallPassed}/${overallTotal}`;
       document.getElementById('overallBar').style.width = `${pct(overallPassed, overallTotal)}%`;
       document.getElementById('failedCount').textContent = String(overallFailed);
-      document.getElementById('targetUrl').textContent = provider.providerBaseUrl || env.providerUrl || 'n/a';
+      document.getElementById('targetUrl').textContent = target;
 
       const serviceMap = enrichServiceMap(report.serviceMap || buildServiceMapClient(consumer, provider));
       const mapSummary = serviceMap?.summary || {};
@@ -815,15 +839,39 @@
       renderServiceMap(serviceMap);
       document.getElementById('serviceDetail').classList.add('hidden');
 
+      // FinVault-style environment panel (TaxMesh labels)
       document.getElementById('envList').innerHTML = [
         ['Gateway URL', env.GATEWAY_BASE_URL || env.TAXMESH_BASE_URL || env.providerUrl],
-        ['Verification base', provider.providerBaseUrl || env.GATEWAY_BASE_URL],
-        ['Project', 'TaxMesh'],
-        ['Swagger', 'GET /api/contracts (listContracts)'],
-        ['Verification base', provider.providerBaseUrl],
+        ['Provider URL', env.providerUrl || provider.providerBaseUrl],
+        ['CLM URL', env.URL_CLM],
+        ['MDM URL', env.URL_MDM],
+        ['ACC URL', env.URL_ACC],
+        ['TAX URL', env.URL_TAX],
+        ['ALC URL', env.URL_ALC],
+        ['DOC URL', env.URL_DOC],
+        ['Consumer', env.consumer || 'TaxMesh Pact consumers'],
+        ['Provider', env.provider || 'TaxMesh APIs'],
+        ['Verification base', provider.providerBaseUrl || target],
+        ['Swagger', 'GET /api/contracts · GET /openapi.json'],
       ].map(([label, value]) => `
         <div class="env-item"><span>${label}</span><code>${value || 'n/a'}</code></div>
       `).join('');
+
+      const ctEdges = serviceMap?.contractEdges || (report.serviceMap && report.serviceMap.contractEdges) || [];
+      const ctSection = document.getElementById('ctMatrixSection');
+      if (ctEdges.length) {
+        ctSection.classList.remove('hidden');
+        document.getElementById('ctMatrixTable').innerHTML = ctEdges.map((edge) => `
+          <tr>
+            <td><code>${escapeHtml(edge.id || '—')}</code></td>
+            <td>${escapeHtml(edge.from)}</td>
+            <td>${escapeHtml(edge.to)}</td>
+            <td>${badge(edge.status || 'unknown')}</td>
+          </tr>
+        `).join('');
+      } else {
+        ctSection.classList.add('hidden');
+      }
 
       document.getElementById('summaryList').innerHTML = [
         ['Consumer ran', consumer.ran ? 'yes' : 'no'],
