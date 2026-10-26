@@ -50,8 +50,15 @@ Pattern matches `InnoVisionDA/EY_Demo` contract gate: **Consumer → Provider �
 
 ### Stages
 
-1. **Consumer** — `npm run test:contract:consumer-only` → publish `pact-files` + `pact-reports`
+1. **Consumer** — `npm run test:contract:consumer-only` → **Swagger coverage gate** (`openapi.json` ↔ Pact) → publish `pact-files` + `pact-reports`
 2. **Provider** — restore pacts → gateway health → `npm run test:contract:provider-only` → email report → publish `pact-provider-report`
+
+Swagger coverage (same rules as the Cursor `ContractCoverageAuditor` / `TestCaseGenratorViaSwagger` agents) fails the pipeline when live OpenAPI has unexpected uncovered ops:
+
+```bash
+npm run test:swagger-coverage          # report only → reports/swagger-coverage.json
+npm run test:swagger-coverage:ci       # --fail-on-gap + refresh docs/SWAGGER_GAP_COVERAGE.md
+```
 
 Reports land in `reports/pact-report.html` and `reports/latest.json` (service map, CT matrix, failures).
 
@@ -66,8 +73,11 @@ Reports land in `reports/pact-report.html` and `reports/latest.json` (service ma
 |----------|---------|---------|
 | `GATEWAY_BASE_URL` | no | TaxMesh gateway (required for provider job) |
 | `URL_CLM` … `URL_DOC` | no | Direct service bases if not on same host |
-| `SMTP_USER` / `SMTP_PASS` | **yes** | Email the HTML report |
-| `REPORT_EMAIL_TO` | no | Defaults in YAML |
+| `SMTP_USER` | no | Default in YAML: `avinashazureemail@gmail.com` (override OK) |
+| `SMTP_PASS` | **yes** | Gmail **App Password** (16 chars) — never commit; pipeline secret only |
+| `REPORT_EMAIL_TO` | no | Defaults to `avinash.sharma@newvision-software.com` |
+
+Email uses **Gmail SMTP** (`smtp.gmail.com:587`). Create app password: https://myaccount.google.com/apppasswords
 
 ### Local report run
 

@@ -90,10 +90,22 @@ Keep it short:
 - Do not count gateway proxy + service path as two missing gaps for the same body  
 - Do not claim “complete” if multipart upload 200 is still deferred without saying so  
 
+## CI equivalent (non-interactive)
+
+The same audit runs in Azure Pipelines after consumer tests:
+
+```bash
+npm run test:swagger-coverage:ci   # fail on missing; writes reports/swagger-coverage.json + gap doc
+```
+
+Implementation: `scripts/verify-swagger-coverage.ts` + `src/swagger/coverageAudit.ts`.  
+Prefer the script in CI; use this agent for interactive triage / narrative reports.
+
 ## Repo pointers
 
 - Consumers: `tests/consumer/`
 - Providers: `tests/provider/`
 - Catalog: `src/catalog/contracts.ts`
 - Gap doc: `docs/SWAGGER_GAP_COVERAGE.md`
+- CI script: `scripts/verify-swagger-coverage.ts`
 - Sibling agent for generation: `.github/agents/TestCaseGenratorViaSwagger.agent.md`

@@ -29,12 +29,14 @@ in CI or via a local one-shot script. You do not replace the Swagger generator.
 2. npm ci (this repo)
 3. Ensure TaxMesh APIs healthy (start sibling demo or use running URLs)
 4. npm run test:consumer
-5. npm run test:provider   # all seven providers
-6. Upload pacts/ (and logs) as artifacts
-7. Fail the job if any provider verify fails
+5. npm run test:swagger-coverage:ci   # OpenAPI ↔ Pact gap gate (live /openapi.json)
+6. npm run test:provider   # all seven providers
+7. Upload pacts/ + reports/swagger-coverage.json as artifacts
+8. Fail the job if any provider verify fails OR swagger gaps (missing ops)
 ```
 
-Equivalent local: `npm run test:contract` when services are already up.
+Equivalent local: `npm run test:contract` when services are already up.  
+Swagger-only: `npm run test:swagger-coverage` (warn) or `:ci` (fail-on-gap).
 
 ### R2 — Service health
 - Default ports: Gateway `4100`, CLM `4101` … DOC `4106`.

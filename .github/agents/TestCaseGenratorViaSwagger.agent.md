@@ -132,10 +132,13 @@ tests/consumer/
 
 ```bash
 npm run test:consumer    # writes ./pacts
+npm run test:swagger-coverage:ci   # same audit CI runs (fail on new Swagger gaps)
 npm run test:provider    # CLM MDM ACC TAX ALC DOC Gateway
 # or
 npm run test:contract
 ```
+
+CI already runs `test:swagger-coverage:ci` in `azure-pipelines.yml` after consumer tests.
 
 TaxMesh stack must be running (`../ContratTestingBussinessDemo` → `npm start`).  
 Fix matcher mismatches against **live** responses; do not weaken matchers to hide real breaks without calling that out.

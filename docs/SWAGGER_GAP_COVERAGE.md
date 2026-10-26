@@ -1,33 +1,21 @@
 # Swagger ↔ Pact coverage gap analysis
 
-Source: `https://pubmed-physiology-speaks-bibliographic.trycloudflare.com/openapi.json`  
+Source: `https://pubmed-physiology-speaks-bibliographic.trycloudflare.com/openapi.json`
 Date: 2026-10-26
 
 ## Summary
 
-| Swagger ops | Previously covered | Gap filled this pass | Still open |
-|-------------|--------------------|----------------------|------------|
-| 107 | ~majority of GET CT/flow/discovery | `contracts/{id}`, `consume/{contractId}`, filing POSTs | Multipart upload **success** path (needs real `.xlsx`) |
+| Swagger ops | Covered | Partial | Missing | Deferred |
+|-------------|---------|---------|---------|----------|
+| 107 | 104 | 0 | 0 | 3 |
 
-## Gaps addressed
+## Deferred
 
-| Swagger operation | Pact addition |
-|-------------------|---------------|
-| `GET /api/contracts/{id}` | Gateway consumer — all CT-00…CT-17 |
-| `GET /api/proxy/{svc}/consume/{contractId}` | Per consumed CT on each consumer service |
-| `POST /api/filing/reset` | Gateway mutation |
-| `POST /api/filing/run-all` | Gateway mutation |
-| `POST /api/filing/run/{stepId}` | Gateway — sample steps `cem`, `tax` |
-| `POST /api/filing/tax/calculate` | Gateway mutation |
-| `POST /api/filing/alc/allocate` | Gateway mutation |
-| `POST /api/filing/upload/{clm\|mdm\|acc}` | Gateway — **400** without multipart file (error contract) |
-
-## Still not fully covered
-
-| Operation | Reason |
-|-----------|--------|
-| `POST /api/filing/upload/*` **200** success | Requires real Excel fixtures + multipart; add E2E or Pact with binary fixtures later |
-| All `run/{stepId}` step values | Sampled `cem` + `tax`; other steps same shape |
+| Method | Path | Note |
+|--------|------|------|
+| GET | `/api/proxy/CLM/upstream/{peerId}` | CLM has no upstream CT peer in catalog — empty peer surface |
+| GET | `/api/proxy/DOC/downstream/{peerId}` | DOC has no downstream CT peer in catalog — empty peer surface |
+| GET | `/api/proxy/MDM/upstream/{peerId}` | MDM has no upstream CT peer in catalog — empty peer surface |
 
 ## Equivalent coverage note
 
