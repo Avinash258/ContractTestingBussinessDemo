@@ -1,0 +1,130 @@
+# Azure DevOps CI — TaxMesh Pact contract tests
+# Project: InnoVisionDA / ContractTesting
+# Repo:    https://github.com/Avinash258/ContractTestingDemoProject (main)
+#
+# In Azure DevOps CI designer: Existing Azure Pipelines YAML file → azure-pipelines.yml
+#
+# Variables (optional, Pipeline → Edit → Variables):
+#   GATEWAY_BASE_URL / TAXMESH_BASE_URL  — remote TaxMesh gateway (provider stage)
+#   URL_CLM, URL_MDM, URL_ACC, URL_TAX, URL_ALC, URL_DOC — direct service bases
+#   RUN_PROVIDER_VERIFY = true           — enable provider job (needs reachable APIs)
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  nodeVersion: '20.x'
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  # Default: consumer-only on Microsoft-hosted agents (no local TaxMesh ports).
+  # Set RUN_PROVIDER_VERIFY=true + service URLs for full verify (e.g. self-hosted).
+  RUN_PROVIDER_VERIFY: 'false'
+
+stages:
+  - stage: ConsumerContracts
+    displayName: Pact consumer tests
+    jobs:
+      - job: Consumer
+        displayName: Generate pacts
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: NodeTool@0
+            displayName: Use Node.js $(nodeVersion)
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - task: Cache@2
+            displayName: Cache npm
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: $(npm_config_cache)
+
+          - script: npm ci
+            displayName: npm ci
+
+          - script: npm run test:consumer
+            displayName: npm run test:consumer
+
+          - task: PublishPipelineArtifact@1
+            displayName: Publish pacts artifact
+            condition: always()
+            inputs:
+              targetPath: $(Build.SourcesDirectory)/pacts
+              artifact: pacts
+              publishLocation: pipeline
+
+          - task: PublishTestResults@2
+            displayName: Publish Jest JUnit (if present)
+            condition: always()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '**/junit.xml'
+              mergeTestResults: true
+              failTaskOnFailedTests: false
+              testRunTitle: Pact consumer
+
+  - stage: ProviderVerification
+    displayName: Pact provider verification
+    dependsOn: ConsumerContracts
+    condition: and(succeeded(), eq(variables['RUN_PROVIDER_VERIFY'], 'true'))
+    jobs:
+      - job: Provider
+        displayName: Verify against TaxMesh
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: NodeTool@0
+            displayName: Use Node.js $(nodeVersion)
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - script: npm ci
+            displayName: npm ci
+
+          - task: DownloadPipelineArtifact@2
+            displayName: Download pacts from consumer stage
+            inputs:
+              buildType: current
+              artifactName: pacts
+              targetPath: $(Build.SourcesDirectory)/pacts
+
+          - bash: |
+              set -euo pipefail
+              GATEWAY="${GATEWAY_BASE_URL:-${TAXMESH_BASE_URL:-}}"
+              if [ -z "$GATEWAY" ]; then
+                echo "##vso[task.logissue type=error]Set GATEWAY_BASE_URL or TAXMESH_BASE_URL when RUN_PROVIDER_VERIFY=true"
+                exit 1
+              fi
+              echo "Probing gateway health: $GATEWAY/api/health"
+              curl -fsS --retry 5 --retry-delay 3 "$GATEWAY/api/health" | head -c 500
+              echo
+            displayName: Health-check TaxMesh gateway
+            env:
+              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
+              TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
+
+          - script: npm run test:provider
+            displayName: npm run test:provider
+            env:
+              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
+              TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
+              URL_CLM: $(URL_CLM)
+              URL_MDM: $(URL_MDM)
+              URL_ACC: $(URL_ACC)
+              URL_TAX: $(URL_TAX)
+              URL_ALC: $(URL_ALC)
+              URL_DOC: $(URL_DOC)

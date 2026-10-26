@@ -70,5 +70,22 @@ export function buildStateHandlers(): Record<string, () => Promise<void>> {
     handlers[`filing endpoint ${path} is available`] = noop;
   }
 
+  for (const ct of CONTRACTS) {
+    handlers[`contract ${ct.id} exists in catalog`] = noop;
+    handlers[
+      `${ct.consumer} can consume ${ct.id} from ${ct.producer}`
+    ] = noop;
+  }
+
+  handlers['filing reset is available'] = noop;
+  handlers['filing run-all is available'] = noop;
+  handlers['filing tax calculate is available'] = noop;
+  handlers['filing alc allocate is available'] = noop;
+  handlers['filing run step cem is available'] = noop;
+  handlers['filing run step tax is available'] = noop;
+  for (const mod of ['clm', 'mdm', 'acc'] as const) {
+    handlers[`filing upload ${mod} rejects missing file`] = noop;
+  }
+
   return handlers;
 }

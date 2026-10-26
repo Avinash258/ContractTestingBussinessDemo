@@ -42,3 +42,30 @@ npm run test:contract
 ```
 
 Override bases: `URL_CLM`, `URL_MDM`, … `GATEWAY_BASE_URL` / `TAXMESH_BASE_URL`.
+
+## Azure DevOps pipeline
+
+Pipeline YAML: [`azure-pipelines.yml`](azure-pipelines.yml)  
+Org/project: `InnoVisionDA` / `ContractTesting` · GitHub repo `Avinash258/ContractTestingDemoProject` · branch `main`
+
+### Create the pipeline in Azure DevOps
+
+1. Open **Pipelines** → **New pipeline** (or finish the Node.js CI designer you started).
+2. Select **GitHub** → `Avinash258/ContractTestingDemoProject`.
+3. Choose **Existing Azure Pipelines YAML file** → path `/azure-pipelines.yml` → branch `main`.
+4. **Save and run**.
+
+Default gate: **Pact consumer tests** (generates `pacts` artifact).  
+Provider verification is **off** on Microsoft-hosted agents (no TaxMesh on `localhost:410x`).
+
+### Optional: enable provider verification
+
+Pipeline → **Edit** → **Variables**:
+
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `RUN_PROVIDER_VERIFY` | `true` | Turn on provider stage |
+| `GATEWAY_BASE_URL` | TaxMesh gateway URL | Health check + gateway verify |
+| `URL_CLM` … `URL_DOC` | Direct service bases | Required for service provider verify |
+
+Use a **self-hosted agent** that can reach TaxMesh (or run the demo stack on that agent). Do not put PATs in YAML; use Azure DevOps secret variables / service connections only.
