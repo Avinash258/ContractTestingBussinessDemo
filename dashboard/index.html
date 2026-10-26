@@ -14,20 +14,44 @@
       --muted: #6b7280;
       --accent: #2563eb;
       --accent-2: #4f46e5;
-      --passed: #15803d;
-      --failed: #b91c1c;
-      --skipped: #b45309;
+      --passed: #166534;
+      --failed: #991b1b;
+      --skipped: #92400e;
+      --covered: #166534;
+      --deferred: #3730a3;
+      --partial: #9a3412;
       --shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+      --table-head: #f8fafc;
+      --chip-bg: #eef2ff;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-2: #334155;
+      --border: #475569;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #60a5fa;
+      --accent-2: #818cf8;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+      --table-head: #1e293b;
+      --chip-bg: #312e81;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      background: #ffffff;
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       line-height: 1.5;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .layout {
@@ -284,7 +308,8 @@
       border-radius: 8px;
       padding: 8px 10px;
       font: inherit;
-      background: #fff;
+      background: var(--surface);
+      color: var(--text);
     }
 
     .table-controls input { min-width: 200px; }
@@ -307,6 +332,7 @@
       border-bottom: 1px solid var(--border);
       text-align: left;
       vertical-align: top;
+      word-break: break-word;
     }
 
     th {
@@ -314,14 +340,23 @@
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      background: #f8fafc;
+      background: var(--table-head);
       position: sticky;
       top: 0;
       z-index: 1;
     }
 
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable::after { content: ' ↕'; opacity: 0.45; font-size: 0.7em; }
+    th.sortable.asc::after { content: ' ↑'; opacity: 1; }
+    th.sortable.desc::after { content: ' ↓'; opacity: 1; }
+
+    code, .endpoint-cell { word-break: anywhere; }
+
     .badge {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       padding: 3px 10px;
       border-radius: 999px;
       font-size: 0.7rem;
@@ -329,9 +364,118 @@
       text-transform: uppercase;
     }
 
-    .badge.passed { background: rgba(34, 197, 94, 0.15); color: var(--passed); }
-    .badge.failed { background: rgba(239, 68, 68, 0.15); color: var(--failed); }
-    .badge.skipped, .badge.unknown { background: rgba(245, 158, 11, 0.15); color: var(--skipped); }
+    .badge.passed, .badge.covered { background: rgba(22, 101, 52, 0.15); color: var(--covered); }
+    .badge.failed { background: rgba(153, 27, 27, 0.15); color: var(--failed); }
+    .badge.skipped, .badge.unknown { background: rgba(146, 64, 14, 0.15); color: var(--skipped); }
+    .badge.deferred { background: rgba(55, 48, 163, 0.15); color: var(--deferred); }
+    .badge.partial { background: rgba(154, 52, 18, 0.15); color: var(--partial); }
+
+    .method-pill {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-right: 6px;
+      letter-spacing: 0.04em;
+    }
+    .method-pill.GET { color: #1d4ed8; background: rgba(29, 78, 216, 0.12); }
+    .method-pill.POST { color: #15803d; background: rgba(21, 128, 61, 0.12); }
+    .method-pill.PUT { color: #b45309; background: rgba(180, 83, 9, 0.12); }
+    .method-pill.PATCH { color: #7c3aed; background: rgba(124, 58, 237, 0.12); }
+    .method-pill.DELETE { color: #b91c1c; background: rgba(185, 28, 28, 0.12); }
+
+    .svc-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .svc-CLM { background: #fde68a; color: #78350f; }
+    .svc-MDM { background: #bfdbfe; color: #1e3a8a; }
+    .svc-ACC { background: #bbf7d0; color: #14532d; }
+    .svc-TAX { background: #fbcfe8; color: #9d174d; }
+    .svc-ALC { background: #ddd6fe; color: #5b21b6; }
+    .svc-DOC { background: #fed7aa; color: #9a3412; }
+    .svc-Gateway { background: #e2e8f0; color: #334155; }
+    .svc-Client { background: #cffafe; color: #155e75; }
+
+    .dur {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 110px;
+    }
+    .dur-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      max-width: 72px;
+    }
+    .dur-bar > span { display: block; height: 100%; border-radius: 999px; }
+    .dur.fast { color: #166534; }
+    .dur.fast .dur-bar > span { background: #22c55e; }
+    .dur.mid { color: #92400e; }
+    .dur.mid .dur-bar > span { background: #f59e0b; }
+    .dur.slow { color: #991b1b; }
+    .dur.slow .dur-bar > span { background: #ef4444; }
+
+    .copy-btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 0.7rem;
+      cursor: pointer;
+      margin-left: 6px;
+    }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .chip {
+      background: var(--chip-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .toast {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      background: #1e293b;
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      z-index: 50;
+      max-width: 360px;
+      font-size: 0.875rem;
+    }
+
+    .bar-chart { display: grid; gap: 8px; margin-top: 8px; }
+    .bar-row { display: grid; grid-template-columns: 90px 1fr 64px; gap: 8px; align-items: center; font-size: 0.75rem; }
+    .bar-track { height: 10px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .bar-track > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+    .bar-row.provider .bar-track > i { background: linear-gradient(90deg, #db2777, #f97316); }
+
+    .clickable-row { cursor: pointer; }
+    .clickable-row:hover { background: var(--surface-2); }
+
+    @media print {
+      .toolbar, #themeToggle, .copy-btn, .toast, button, .file-btn { display: none !important; }
+      details.card { break-inside: avoid; }
+      details.card[open] > summary ~ * { display: block !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .table-scroll { max-height: none; overflow: visible; }
+      tr { break-inside: avoid; }
+    }
 
     .failures { display: grid; gap: 12px; }
 
@@ -453,13 +597,15 @@
         <h1>TaxMesh Contract Test Dashboard</h1>
         <p class="subtitle" id="headerSubtitle">Pact consumer + provider verification overview</p>
         <p class="build-meta" id="buildMeta"></p>
+        <p class="build-meta" id="lastRunMeta" title="">Last run: —</p>
       </div>
       <div class="toolbar">
-        <button type="button" id="expandAllBtn" class="secondary">Expand all</button>
-        <button type="button" id="collapseAllBtn" class="secondary">Collapse all</button>
-        <button type="button" id="excelBtn" class="secondary">Download Excel</button>
-        <button type="button" id="refreshBtn">Refresh</button>
-        <label class="file-btn secondary">
+        <button type="button" id="themeToggle" class="secondary" aria-label="Toggle dark mode">Dark mode</button>
+        <button type="button" id="expandAllBtn" class="secondary" aria-label="Expand all sections">Expand all</button>
+        <button type="button" id="collapseAllBtn" class="secondary" aria-label="Collapse all sections">Collapse all</button>
+        <button type="button" id="excelBtn" class="secondary" aria-label="Download Excel report">Download Excel</button>
+        <button type="button" id="refreshBtn" aria-label="Refresh report data">Refresh</button>
+        <label class="file-btn secondary" aria-label="Load JSON report file">
           Load JSON
           <input type="file" id="fileInput" accept="application/json,.json" />
         </label>
@@ -467,8 +613,16 @@
     </header>
 
     <section id="emptyState" class="card empty">
-      No report loaded. Run <code>npm run test:contract</code> to refresh <code>dashboard/data/latest.json</code>, open a packaged <code>TaxMesh-Contract-Dashboard</code> zip, or use <strong>Load JSON</strong> to import a report file.
+      <p>No report loaded.</p>
+      <p class="meta" id="emptyHint" style="margin-top:10px">Tried <code>data/latest.json</code> and embedded <code>latest.js</code>. Run <code>npm run test:contract</code> or use <strong>Load JSON</strong>.</p>
+      <p style="margin-top:14px">
+        <label class="file-btn" style="display:inline-block">
+          Load JSON
+          <input type="file" id="emptyFileInput" accept="application/json,.json" />
+        </label>
+      </p>
     </section>
+    <div id="toastHost" aria-live="polite"></div>
 
     <div id="dashboard" class="hidden">
       <section class="status-hero">
@@ -553,7 +707,7 @@
       </section>
 
       <details class="card" id="envSection">
-        <summary>
+        <summary aria-expanded="false">
           <span class="chevron" aria-hidden="true"></span>
           <h2>Environment &amp; summary</h2>
         </summary>
@@ -566,6 +720,25 @@
             <div>
               <p class="meta">High-level contract health</p>
               <div class="env-list" id="summaryList"></div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="card" id="slowChartSection">
+        <summary aria-expanded="false">
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Slowest tests chart</h2>
+        </summary>
+        <div class="body">
+          <div class="grid-2" style="margin-bottom:0">
+            <div>
+              <p class="meta">Top 10 consumer</p>
+              <div class="bar-chart" id="slowConsumerChart"></div>
+            </div>
+            <div>
+              <p class="meta">Top 10 provider</p>
+              <div class="bar-chart" id="slowProviderChart"></div>
             </div>
           </div>
         </div>
