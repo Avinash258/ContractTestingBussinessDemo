@@ -108,13 +108,29 @@ stages:
 
           - bash: |
               set -euo pipefail
-              GATEWAY="${GATEWAY_BASE_URL:-${TAXMESH_BASE_URL:-}}"
+              # ADO leaves the literal "$(VAR)" when a pipeline variable is unset.
+              normalize() {
+                local v="${1:-}"
+                case "$v" in
+                  ''|'$(GATEWAY_BASE_URL)'|'$(TAXMESH_BASE_URL)') echo "" ;;
+                  *) echo "$v" ;;
+                esac
+              }
+              GATEWAY="$(normalize "${GATEWAY_BASE_URL:-}")"
               if [ -z "$GATEWAY" ]; then
-                echo "##vso[task.logissue type=error]Set pipeline variable GATEWAY_BASE_URL (or TAXMESH_BASE_URL) to your TaxMesh gateway."
+                GATEWAY="$(normalize "${TAXMESH_BASE_URL:-}")"
+              fi
+              if [ -z "$GATEWAY" ]; then
+                echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is not set. Add it under Pipeline → Edit → Variables (e.g. https://your-taxmesh-host or ngrok URL). Provider verification needs a reachable TaxMesh gateway."
+                echo "##vso[task.complete result=Failed;]"
                 exit 1
               fi
               echo "Pre-check gateway: $GATEWAY/api/health"
-              curl -sf --retry 8 --retry-delay 3 "$GATEWAY/api/health" | head -c 800
+              if ! curl -sf --retry 8 --retry-delay 3 --connect-timeout 10 "$GATEWAY/api/health" | head -c 800; then
+                echo
+                echo "##vso[task.logissue type=error]Gateway health check failed for $GATEWAY/api/health — is TaxMesh running and reachable from the internet (ADO agents)?"
+                exit 1
+              fi
               echo
             displayName: 'Pre-check — TaxMesh gateway health'
             env:
