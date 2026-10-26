@@ -2,16 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { config } from '../config';
 
-/** List pact JSON files whose provider.name matches `providerName`. */
-export function listPactFilesForProvider(providerName: string): string[] {
+/** Find pact JSON files whose provider.name matches `providerName` (empty if none). */
+export function findPactFilesForProvider(providerName: string): string[] {
   const dir = config.pactsDir;
-  if (!fs.existsSync(dir)) {
-    throw new Error(
-      `No pacts directory at ${dir}. Run consumer tests first: npm run test:consumer`
-    );
-  }
+  if (!fs.existsSync(dir)) return [];
 
-  const files = fs
+  return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith('.json'))
     .map((f) => path.join(dir, f))
@@ -25,6 +21,22 @@ export function listPactFilesForProvider(providerName: string): string[] {
         return false;
       }
     });
+}
+
+export function hasPactFilesForProvider(providerName: string): boolean {
+  return findPactFilesForProvider(providerName).length > 0;
+}
+
+/** List pact JSON files whose provider.name matches `providerName`. */
+export function listPactFilesForProvider(providerName: string): string[] {
+  const dir = config.pactsDir;
+  if (!fs.existsSync(dir)) {
+    throw new Error(
+      `No pacts directory at ${dir}. Run consumer tests first: npm run test:consumer`
+    );
+  }
+
+  const files = findPactFilesForProvider(providerName);
 
   if (files.length === 0) {
     throw new Error(

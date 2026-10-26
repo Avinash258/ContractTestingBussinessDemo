@@ -19,6 +19,7 @@ import {
 } from '../src/reporting/generateReport';
 import { config } from '../src/config';
 import { SERVICES, type ServiceId } from '../src/catalog/contracts';
+import { hasPactFilesForProvider } from '../src/pact/listPacts';
 
 const root = process.cwd();
 const reportsDir = ensureReportsDir();
@@ -108,9 +109,43 @@ function consumerTestPathPattern(): string {
   return Array.from(fragments).join('|') || 'tests/consumer';
 }
 
+function providerNameFor(service: ServiceId | 'Gateway'): string {
+  return service === 'Gateway' ? 'TaxMesh-Gateway' : SERVICES[service].pactProvider;
+}
+
+/**
+ * Providers to verify for this run.
+ * CLM+MDM scope only generates CT-00 (MDM ← CLM), so MDM is a consumer — not a provider.
+ * For other scoped runs, skip services that have no matching pact files after consumer gen.
+ */
 function providersToRun(): Array<ServiceId | 'Gateway'> {
-  if (!selectedServices?.length) return ALL_PROVIDERS;
-  return selectedServices.filter((s) => ALL_PROVIDERS.includes(s));
+  let candidates: Array<ServiceId | 'Gateway'>;
+  if (!selectedServices?.length) {
+    candidates = ALL_PROVIDERS;
+  } else if (
+    selectedServices.length === 2 &&
+    selectedServices.includes('CLM') &&
+    selectedServices.includes('MDM')
+  ) {
+    candidates = ['CLM'];
+  } else {
+    candidates = selectedServices.filter((s) => ALL_PROVIDERS.includes(s));
+  }
+
+  if (!scopedRun) return candidates;
+
+  const withPacts = candidates.filter((service) =>
+    hasPactFilesForProvider(providerNameFor(service))
+  );
+  const skipped = candidates.filter((s) => !withPacts.includes(s));
+  if (skipped.length) {
+    console.log(
+      `Skipping provider verify (no pact files): ${skipped
+        .map(providerNameFor)
+        .join(', ')}`
+    );
+  }
+  return withPacts;
 }
 
 function listPactFiles(): string[] {
@@ -229,8 +264,7 @@ function runOneProvider(service: ServiceId | 'Gateway'): {
       ? 'tests/provider/gateway.provider.verify.ts'
       : `tests/provider/${service.toLowerCase()}.provider.verify.ts`;
 
-  const providerName =
-    service === 'Gateway' ? 'TaxMesh-Gateway' : SERVICES[service].pactProvider;
+  const providerName = providerNameFor(service);
 
   console.log(`\n--- Provider: ${providerName} ---\n`);
   const result = spawnSync(
