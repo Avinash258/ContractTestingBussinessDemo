@@ -1794,6 +1794,7 @@ ${sheets.join('\n')}
         ctSection.classList.add('hidden');
       }
 
+      const cov = report.coverage?.totals || {};
       document.getElementById('summaryList').innerHTML = [
         ['Consumer ran', consumer.ran ? 'yes' : 'no'],
         ['Consumer status', consumer.status],
@@ -1802,9 +1803,18 @@ ${sheets.join('\n')}
         ['Overall', overall],
         ['Consumer failed', consumer.failed || 0],
         ['Provider failed', provider.failed || 0],
+        ['Consumer duration', `${consumer.durationMs || 0} ms`],
+        ['Provider duration', `${provider.durationMs || 0} ms`],
+        ['Total duration', `${(totalDurationMs / 1000).toFixed(2)} s`],
+        ['Build ID', displayOrNotProvided(env.BUILD_BUILDID)],
+        ['Branch', displayOrNotProvided(env.BUILD_SOURCEBRANCH)],
+        ['Commit', displayOrNotProvided(env.BUILD_SOURCEVERSION)],
         ['Pact files', (report.pactFiles || []).length],
+        ['Coverage covered', cov.covered ?? '—'],
+        ['Coverage partial', cov.partial ?? '—'],
+        ['Coverage deferred', cov.deferred ?? '—'],
       ].map(([label, value]) => `
-        <div class="env-item"><span>${label}</span><code>${escapeHtml(value || 'n/a')}</code></div>
+        <div class="env-item"><span>${label}</span><code>${escapeHtml(value ?? 'n/a')}</code></div>
       `).join('');
 
       const phaseRow = (label, value, badgeHtml = '') => `
@@ -1844,14 +1854,30 @@ ${sheets.join('\n')}
         document.getElementById('providerFilter').value = 'failed';
       }
 
+      const hash = readHashFilters();
+      if (hash.cStatus) document.getElementById('consumerFilter').value = hash.cStatus;
+      if (hash.cQ) document.getElementById('consumerSearch').value = hash.cQ;
+      if (hash.pStatus) document.getElementById('providerFilter').value = hash.pStatus;
+      if (hash.pQ) document.getElementById('providerSearch').value = hash.pQ;
+      if (hash.pact) providerPactFilter = hash.pact;
+      if (hash.covStatus) document.getElementById('coverageFilter').value = hash.covStatus;
+      if (hash.covMethod) document.getElementById('coverageMethodFilter').value = hash.covMethod;
+      if (hash.covQ) document.getElementById('coverageSearch').value = hash.covQ;
+
       renderConsumerTable();
       renderProviderTable();
+      renderCoverageTable();
 
-      const pactFiles = report.pactFiles || [];
-      document.getElementById('pactFilesBadge').textContent = `${pactFiles.length} files`;
-      document.getElementById('pactFilesTable').innerHTML = pactFiles.map((file) => `
-        <tr><td><code>${escapeHtml(file)}</code></td></tr>
-      `).join('') || '<tr><td>No pact files</td></tr>';
+      const pactRows = sortRows(getPactFileRows(), sortState.pact.key, sortState.pact.dir);
+      document.getElementById('pactFilesBadge').textContent = `${pactRows.length} files`;
+      document.getElementById('pactFilesTable').innerHTML = pactRows.map((row) => `
+        <tr class="clickable-row" data-pact="${escapeHtml(row.file)}" title="Filter provider table to this pact">
+          <td><code>${escapeHtml(row.file)}</code></td>
+          <td>${svcChip(row.consumer)}</td>
+          <td>${svcChip(row.provider)}</td>
+          <td>${row.interactions}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">No pact files</td></tr>';
 
       const slowConsumer = [...(consumer.tests || [])]
         .sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0))
@@ -1861,15 +1887,29 @@ ${sheets.join('\n')}
         .sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0))
         .slice(0, 10)
         .map((t) => ({ phase: 'Provider', endpoint: t.endpoint || '—', name: t.description, durationMs: t.durationMs || 0, status: t.status }));
-      document.getElementById('slowTable').innerHTML = [...slowConsumer, ...slowProvider].map((row) => `
+      const slowAll = sortRows([...slowConsumer, ...slowProvider], sortState.slow.key, sortState.slow.dir);
+      document.getElementById('slowTable').innerHTML = slowAll.map((row) => `
         <tr>
           <td>${escapeHtml(row.phase)}</td>
-          <td><code>${escapeHtml(row.endpoint)}</code></td>
+          <td>${endpointHtml(row.endpoint)}</td>
           <td>${escapeHtml(row.name)}</td>
-          <td>${row.durationMs}ms</td>
+          <td>${durationHtml(row.durationMs, row.phase === 'Provider' ? 'provider' : 'consumer')}</td>
           <td>${badge(row.status)}</td>
         </tr>
       `).join('') || '<tr><td colspan="5">No timing data</td></tr>';
+
+      const renderBars = (elId, rows, cls) => {
+        const max = Math.max(1, ...rows.map((r) => r.durationMs || 0));
+        document.getElementById(elId).innerHTML = rows.map((r) => `
+          <div class="bar-row ${cls}">
+            <span title="${escapeHtml(r.name || '')}">${escapeHtml(String(r.name || r.endpoint || '').slice(0, 18))}</span>
+            <div class="bar-track"><i style="width:${Math.round(((r.durationMs || 0) / max) * 100)}%"></i></div>
+            <span>${r.durationMs || 0}ms</span>
+          </div>
+        `).join('') || '<p class="meta">No data</p>';
+      };
+      renderBars('slowConsumerChart', slowConsumer, 'consumer');
+      renderBars('slowProviderChart', slowProvider, 'provider');
 
       const highlights = [];
       for (const failure of consumer.failures || []) {
