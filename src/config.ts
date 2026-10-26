@@ -9,20 +9,40 @@ export const config = {
   logDir: path.resolve(process.cwd(), 'logs'),
 
   gatewayBaseUrl:
-    process.env.GATEWAY_BASE_URL ||
-    process.env.TAXMESH_BASE_URL ||
-    'http://127.0.0.1:4100',
+    (
+      process.env.GATEWAY_BASE_URL ||
+      process.env.TAXMESH_BASE_URL ||
+      process.env.PACT_PROVIDER_URL ||
+      'http://127.0.0.1:4100'
+    ).replace(/\/$/, ''),
 
   gatewayPact: GATEWAY_PACT,
 
+  /**
+   * Per-service provider base URL.
+   * - URL_CLM / CLM_BASE_URL etc. win when set
+   * - Else if a gateway/tunnel URL is set (CI), verify via
+   *   `{GATEWAY}/api/proxy/{svc}` (same as Swagger)
+   * - Else local direct ports 4101–4106
+   */
   serviceBaseUrl(serviceId: ServiceId): string {
     const envKey = `URL_${serviceId}`;
     const alt = `${serviceId}_BASE_URL`;
-    return (
-      process.env[envKey] ||
-      process.env[alt] ||
-      `http://127.0.0.1:${SERVICES[serviceId].port}`
-    );
+    const explicit = process.env[envKey] || process.env[alt];
+    if (explicit) return explicit.replace(/\/$/, '');
+
+    const gateway =
+      process.env.GATEWAY_BASE_URL ||
+      process.env.TAXMESH_BASE_URL ||
+      process.env.PACT_PROVIDER_URL;
+
+    if (gateway) {
+      const base = gateway.replace(/\/$/, '');
+      // Remote CI / tunnel: services are only reachable through the gateway proxy
+      return `${base}/api/proxy/${SERVICES[serviceId].key}`;
+    }
+
+    return `http://127.0.0.1:${SERVICES[serviceId].port}`;
   },
 
   // Back-compat for earlier CLM↔MDM helpers

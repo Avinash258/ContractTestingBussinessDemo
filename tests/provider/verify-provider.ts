@@ -22,6 +22,8 @@ export async function verifyProvider(opts: {
     providerBaseUrl: opts.baseUrl,
     pactUrls,
     logLevel: 'info',
+    // Cloudflare / remote tunnels need more than the default ~5–30s
+    timeout: 120_000,
     stateHandlers: opts.stateHandlers || {},
   }).verifyProvider();
 
