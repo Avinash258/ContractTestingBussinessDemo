@@ -19,10 +19,13 @@ export const config = {
   gatewayPact: GATEWAY_PACT,
 
   /**
-   * Per-service provider base URL.
+   * Per-service provider base URL (Swagger /api-docs).
+   * Gateway catalog: GET {GATEWAY}/api/contracts  (operationId: listContracts)
+   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/…
+   * @see https://pubmed-physiology-speaks-bibliographic.trycloudflare.com/api-docs#/Gateway/listContracts
+   *
    * - URL_CLM / CLM_BASE_URL etc. win when set
-   * - Else if a gateway/tunnel URL is set (CI), verify via
-   *   `{GATEWAY}/api/proxy/{svc}` (same as Swagger)
+   * - Else if GATEWAY_BASE_URL is set → `{GATEWAY}/api/proxy/{SERVICE_ID}` (uppercase, Swagger)
    * - Else local direct ports 4101–4106
    */
   serviceBaseUrl(serviceId: ServiceId): string {
@@ -38,8 +41,8 @@ export const config = {
 
     if (gateway) {
       const base = gateway.replace(/\/$/, '');
-      // Remote CI / tunnel: services are only reachable through the gateway proxy
-      return `${base}/api/proxy/${SERVICES[serviceId].key}`;
+      // Swagger paths use uppercase service ids: /api/proxy/CLM/health
+      return `${base}/api/proxy/${serviceId}`;
     }
 
     return `http://127.0.0.1:${SERVICES[serviceId].port}`;
