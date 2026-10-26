@@ -6,6 +6,7 @@
 # Project: https://dev.azure.com/InnoVisionDA/ContractTesting
 #
 # Run pipeline UI — paste gateway origin only (no /api-docs path). Override when tunnel rotates.
+# Required secret variable: SMTP_PASS = Gmail App Password for SMTP_USER below.
 
 parameters:
   - name: gatewayBaseUrl
@@ -16,7 +17,7 @@ parameters:
   - name: reportEmailTo
     displayName: 'Send HTML report to'
     type: string
-    default: 'aviansh.sharma@newvision-software.com'
+    default: 'avinash.sharma@newvision-software.com'
 
 trigger:
   branches:
@@ -41,9 +42,11 @@ variables:
   TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
   PACT_PROVIDER_URL: ${{ parameters.gatewayBaseUrl }}
   REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
-  SMTP_HOST: 'smtp.office365.com'
+  # Sender = Gmail (pinned). Only SMTP_PASS comes from a secret pipeline variable.
+  SMTP_HOST: 'smtp.gmail.com'
   SMTP_PORT: '587'
-  SMTP_FROM: 'aviansh.sharma@newvision-software.com'
+  SMTP_USER: 'avinashazureemail@gmail.com'
+  SMTP_FROM: 'avinashazureemail@gmail.com'
 
 stages:
   - stage: ContractTests
@@ -67,12 +70,31 @@ stages:
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
 
+          # Same rules as ContractCoverageAuditor / TestCaseGenratorViaSwagger — fail on uncovered OpenAPI ops
+          - script: |
+              set -euo pipefail
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+              echo "Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
+              npm run test:swagger-coverage:ci
+            displayName: 'Swagger coverage gate (OpenAPI ↔ Pact)'
+            env:
+              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
+              TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
+              SWAGGER_COVERAGE_FAIL: '1'
+              SWAGGER_COVERAGE_WRITE_DOC: '1'
+
           - publish: $(System.DefaultWorkingDirectory)/pacts
             artifact: pact-files
             condition: succeededOrFailed()
 
           - publish: $(System.DefaultWorkingDirectory)/reports
             artifact: pact-reports
+            condition: succeededOrFailed()
+
+          - publish: $(System.DefaultWorkingDirectory)/docs
+            artifact: swagger-gap-doc
             condition: succeededOrFailed()
 
       - job: ProviderVerification
@@ -148,32 +170,40 @@ stages:
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
               PACT_PROVIDER_URL: $(GATEWAY_BASE_URL)
-              SMTP_USER: $(SMTP_USER)
-              SMTP_PASS: $(SMTP_PASS)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
 
+          # Host/user pinned to Gmail so ADO library vars (e.g. smtp.office365.com) cannot override.
+          # Only SMTP_PASS comes from a secret pipeline variable (Gmail App Password).
           - script: |
-              if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
-                echo "SMTP_USER or SMTP_PASS not set — skipping email report."
+              set -euo pipefail
+              if [ -z "${SMTP_PASS:-}" ]; then
+                echo "SMTP_PASS not set — skipping email report. Add secret variable SMTP_PASS = Gmail App Password."
                 exit 0
               fi
+              # Collapse empty entries from pasted "a,,b" recipient lists
+              REPORT_EMAIL_TO="$(echo "${REPORT_EMAIL_TO}" | tr ',' '\n' | sed '/^[[:space:]]*$/d' | paste -sd, -)"
+              echo "SMTP: ${SMTP_HOST} as ${SMTP_USER}"
               echo "Sending HTML report to: ${REPORT_EMAIL_TO}"
               npm run send-report
             displayName: 'Email HTML report'
             condition: succeededOrFailed()
             continueOnError: true
             env:
-              SMTP_USER: $(SMTP_USER)
+              SMTP_HOST: 'smtp.gmail.com'
+              SMTP_PORT: '587'
+              SMTP_USER: 'avinashazureemail@gmail.com'
+              SMTP_FROM: 'avinashazureemail@gmail.com'
               SMTP_PASS: $(SMTP_PASS)
-              SMTP_HOST: $(SMTP_HOST)
-              SMTP_PORT: $(SMTP_PORT)
-              SMTP_FROM: $(SMTP_FROM)
               REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
+
+          - script: mkdir -p reports dashboard
+            displayName: 'Ensure report/dashboard folders exist'
+            condition: always()
 
           - publish: $(System.DefaultWorkingDirectory)/reports
             artifact: pact-provider-report
