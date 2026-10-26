@@ -6,6 +6,7 @@
 # Project: https://dev.azure.com/InnoVisionDA/ContractTesting
 #
 # Run pipeline UI — paste gateway origin only (no /api-docs path). Override when tunnel rotates.
+# Required secret variable: SMTP_PASS = Gmail App Password for SMTP_USER below.
 
 parameters:
   - name: gatewayBaseUrl
@@ -41,7 +42,7 @@ variables:
   TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
   PACT_PROVIDER_URL: ${{ parameters.gatewayBaseUrl }}
   REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
-  # Sender = Gmail (Option A). SMTP_USER / SMTP_PASS must be pipeline variables (PASS = secret App Password).
+  # Sender = Gmail (pinned). Only SMTP_PASS comes from a secret pipeline variable.
   SMTP_HOST: 'smtp.gmail.com'
   SMTP_PORT: '587'
   SMTP_USER: 'avinashazureemail@gmail.com'
@@ -69,7 +70,7 @@ stages:
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
 
-          # Same rules as ContractCoverageAuditor / TestCaseGenratorViaSwagger — fail on new uncovered OpenAPI ops
+          # Same rules as ContractCoverageAuditor / TestCaseGenratorViaSwagger — fail on uncovered OpenAPI ops
           - script: |
               set -euo pipefail
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
@@ -199,6 +200,10 @@ stages:
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
+
+          - script: mkdir -p reports dashboard
+            displayName: 'Ensure report/dashboard folders exist'
+            condition: always()
 
           - publish: $(System.DefaultWorkingDirectory)/reports
             artifact: pact-provider-report
