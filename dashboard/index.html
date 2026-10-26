@@ -619,9 +619,9 @@
 
     function serviceIdFromEndpoint(endpoint) {
       const value = String(endpoint || '');
-      const proxy = //api/proxy/(CLM|MDM|ACC|TAX|ALC|DOC)/i.exec(value);
+      const proxy = /\/api\/proxy\/(CLM|MDM|ACC|TAX|ALC|DOC)/i.exec(value);
       if (proxy) return proxy[1].toUpperCase();
-      const known = ['CLM','MDM','ACC','TAX','ALC','DOC'];
+      const known = ['CLM', 'MDM', 'ACC', 'TAX', 'ALC', 'DOC'];
       for (const id of known) {
         if (new RegExp('\\b' + id + '\\b', 'i').test(value)) return id;
       }
