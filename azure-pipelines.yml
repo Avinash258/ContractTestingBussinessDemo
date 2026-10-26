@@ -12,19 +12,20 @@
 #   SMTP_USER / SMTP_PASS (secret) — required to actually send email
 #   SMTP_FROM / SMTP_HOST / SMTP_PORT
 
+# These fields appear in Azure DevOps → Pipelines → Run pipeline (NOT from the YAML editor Run).
 parameters:
   - name: gatewayBaseUrl
-    displayName: 'TaxMesh gateway base URL (e.g. https://xxxx.ngrok-free.app)'
+    displayName: '1) TaxMesh TARGET URL (paste before run) — e.g. https://xxxx.ngrok-free.app'
     type: string
     default: ''
 
   - name: reportEmailTo
-    displayName: 'Send HTML report to (email)'
+    displayName: '2) Report email TO (HTML results)'
     type: string
     default: 'aviansh.sharma@newvision-software.com'
 
   - name: skipProviderIfNoGateway
-    displayName: 'Skip provider when gateway URL is empty (keep consumer green on CI)'
+    displayName: '3) Skip provider if TARGET URL is empty'
     type: boolean
     default: true
 
