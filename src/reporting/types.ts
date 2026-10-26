@@ -5,6 +5,9 @@ export interface InteractionResult {
   provider: string;
   consumer?: string;
   endpoint?: string;
+  method?: string;
+  path?: string;
+  pactFile?: string;
   status: PhaseStatus;
   durationMs?: number;
   reason?: string;

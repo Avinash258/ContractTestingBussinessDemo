@@ -256,9 +256,10 @@ export function buildEmailDashboardBody(
     ${failureSection}
 
     <div style="margin:16px 0;padding:14px 16px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff">
-      <p style="margin:0;font-size:14px;font-weight:700;color:#1d4ed8">Interactive dashboard (zip attachment)</p>
+      <p style="margin:0;font-size:14px;font-weight:700;color:#1d4ed8">Interactive dashboard + Excel</p>
       <p style="margin:8px 0 0;font-size:13px;color:#1e40af">
         Unzip <strong>TaxMesh-Contract-Dashboard.zip</strong>, then open <strong>index.html</strong> in your browser.
+        Use Expand/Collapse, filters, Load more, and Download Excel. A multi-sheet <strong>TaxMesh-Contract-Report.xlsx</strong> is also attached when available.
       </p>
     </div>
 

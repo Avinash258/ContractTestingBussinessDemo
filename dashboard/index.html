@@ -102,6 +102,51 @@
       border-radius: 16px;
       padding: 20px;
       box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+
+    details.card {
+      padding: 0;
+    }
+
+    details.card > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 18px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      user-select: none;
+    }
+
+    details.card > summary::-webkit-details-marker { display: none; }
+
+    details.card > summary .chevron::before {
+      content: '▶';
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    details.card[open] > summary .chevron::before { content: '▼'; }
+
+    details.card > summary h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      flex: 1;
+    }
+
+    details.card .body {
+      padding: 0 20px 20px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+
+    .section-badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
     }
 
     .overall {
@@ -198,21 +243,18 @@
       .grid-2 { grid-template-columns: 1fr; }
     }
 
-    .card h2 {
+    .card h2, details.card h2 {
       font-size: 1.1rem;
-      margin-bottom: 8px;
+      margin-bottom: 0;
     }
 
-    .card .meta {
+    .card .meta, .body .meta {
       color: var(--muted);
       font-size: 0.85rem;
       margin-bottom: 14px;
     }
 
-    .env-list {
-      display: grid;
-      gap: 10px;
-    }
+    .env-list { display: grid; gap: 10px; }
 
     .env-item {
       display: flex;
@@ -226,11 +268,32 @@
     }
 
     .env-item span:first-child { color: var(--muted); }
+    .env-item code { color: var(--text); word-break: break-all; text-align: right; }
 
-    .env-item code {
-      color: var(--text);
-      word-break: break-all;
-      text-align: right;
+    .table-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .table-controls input,
+    .table-controls select {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      background: #fff;
+    }
+
+    .table-controls input { min-width: 200px; }
+
+    .table-scroll {
+      overflow: auto;
+      max-height: 480px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
     }
 
     table {
@@ -251,6 +314,10 @@
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      background: #f8fafc;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
 
     .badge {
@@ -266,10 +333,7 @@
     .badge.failed { background: rgba(239, 68, 68, 0.15); color: var(--failed); }
     .badge.skipped, .badge.unknown { background: rgba(245, 158, 11, 0.15); color: var(--skipped); }
 
-    .failures {
-      display: grid;
-      gap: 12px;
-    }
+    .failures { display: grid; gap: 12px; }
 
     .failure {
       background: #fef2f2;
@@ -280,12 +344,6 @@
 
     .failure h4 { margin-bottom: 8px; color: #991b1b; }
 
-    .failure ul {
-      margin-left: 18px;
-      color: #b91c1c;
-      font-size: 0.85rem;
-    }
-
     .empty {
       color: var(--muted);
       padding: 24px;
@@ -295,10 +353,6 @@
     }
 
     .hidden { display: none !important; }
-
-    .phase-card h2 { font-size: 1rem; }
-
-    .service-map-section { margin-bottom: 20px; }
 
     .service-map-legend {
       display: flex;
@@ -344,12 +398,8 @@
     .map-node { cursor: pointer; }
     .map-node:hover circle:first-of-type { stroke-width: 5; }
     .map-node.selected circle:first-of-type { stroke-width: 6; }
-
     .map-node.passed .node-ring { animation: pulse-green 2s ease-in-out infinite; }
     .map-node.failed .node-ring { animation: pulse-red 1.5s ease-in-out infinite; }
-
-    .map-node.skipped .node-ring,
-    .map-node.unknown .node-ring { animation: none; }
 
     @keyframes pulse-green {
       0%, 100% { opacity: 0.25; r: 42; }
@@ -388,6 +438,12 @@
       border: 1px solid var(--border);
       font-size: 0.8rem;
     }
+
+    .build-meta {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -396,8 +452,12 @@
       <div>
         <h1>TaxMesh Contract Test Dashboard</h1>
         <p class="subtitle" id="headerSubtitle">Pact consumer + provider verification overview</p>
+        <p class="build-meta" id="buildMeta"></p>
       </div>
       <div class="toolbar">
+        <button type="button" id="expandAllBtn" class="secondary">Expand all</button>
+        <button type="button" id="collapseAllBtn" class="secondary">Collapse all</button>
+        <button type="button" id="excelBtn" class="secondary">Download Excel</button>
         <button type="button" id="refreshBtn">Refresh</button>
         <label class="file-btn secondary">
           Load JSON
@@ -412,7 +472,7 @@
 
     <div id="dashboard" class="hidden">
       <section class="status-hero">
-        <div id="overallCard" class="card overall unknown">
+        <div id="overallCard" class="card overall unknown" style="margin-bottom:0">
           <div class="overall-ring" id="overallRing">—</div>
           <div id="generatedAt" class="subtitle">—</div>
         </div>
@@ -447,97 +507,193 @@
         </div>
       </section>
 
-      <section class="card service-map-section">
-        <h2>Microservice map</h2>
-        <p class="meta">Client → Gateway → services, colored by contract-test health — green = OK, red = failure</p>
-        <div class="service-map-legend" id="mapLegend"></div>
-        <div class="service-map-canvas" id="serviceMapCanvas"></div>
-        <div id="serviceDetail" class="service-detail hidden"></div>
-      </section>
-
-      <section id="ctMatrixSection" class="card hidden" style="margin-bottom:20px">
-        <h2>CT matrix (CT-00…CT-17)</h2>
-        <p class="meta">Producer → consumer contract edges (shown here, not on the map — FinVault-style clean topology)</p>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr><th>CT id</th><th>From</th><th>To</th><th>Status</th></tr>
-            </thead>
-            <tbody id="ctMatrixTable"></tbody>
-          </table>
+      <details class="card" id="mapSection" open>
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Microservice map</h2>
+        </summary>
+        <div class="body">
+          <p class="meta">Client → Gateway → services, colored by contract-test health — green = OK, red = failure</p>
+          <div class="service-map-legend" id="mapLegend"></div>
+          <div class="service-map-canvas" id="serviceMapCanvas"></div>
+          <div id="serviceDetail" class="service-detail hidden"></div>
         </div>
-      </section>
+      </details>
 
-      <section class="grid-2" style="margin-bottom:20px">
-        <div class="card phase-card" id="consumerPhaseCard">
+      <details class="card hidden" id="ctMatrixSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>CT matrix (CT-00…CT-17)</h2>
+          <span class="meta" id="ctMatrixBadge"></span>
+        </summary>
+        <div class="body">
+          <p class="meta">Producer → consumer contract edges (shown here, not on the map)</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>CT id</th><th>From</th><th>To</th><th>Status</th></tr>
+              </thead>
+              <tbody id="ctMatrixTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <section class="grid-2">
+        <div class="card phase-card" id="consumerPhaseCard" style="margin-bottom:0">
           <h2>1. Consumer</h2>
           <p class="meta">Jest tests against Pact mock server</p>
           <div class="env-list" id="consumerPhaseSummary"></div>
         </div>
-        <div class="card phase-card" id="providerPhaseCard">
+        <div class="card phase-card" id="providerPhaseCard" style="margin-bottom:0">
           <h2>2. Provider</h2>
           <p class="meta">Live API verification against pact files</p>
           <div class="env-list" id="providerPhaseSummary"></div>
         </div>
       </section>
 
-      <section class="grid-2">
-        <div class="card">
-          <h2>Environment</h2>
-          <p class="meta">Targets used for this verification run</p>
-          <div class="env-list" id="envList"></div>
+      <details class="card" id="envSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Environment &amp; summary</h2>
+        </summary>
+        <div class="body">
+          <div class="grid-2" style="margin-bottom:0">
+            <div>
+              <p class="meta">Targets used for this verification run</p>
+              <div class="env-list" id="envList"></div>
+            </div>
+            <div>
+              <p class="meta">High-level contract health</p>
+              <div class="env-list" id="summaryList"></div>
+            </div>
+          </div>
         </div>
-        <div class="card">
-          <h2>Summary</h2>
-          <p class="meta">High-level contract health</p>
-          <div class="env-list" id="summaryList"></div>
-        </div>
-      </section>
+      </details>
 
-      <section id="highlightsSection" class="card hidden" style="margin-bottom:20px">
-        <h2>Failure highlights</h2>
-        <p class="meta">Top reasons consumer or provider verification failed</p>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr><th>Phase</th><th>Endpoint</th><th>Test / interaction</th><th>Expected</th><th>Actual</th></tr>
-            </thead>
-            <tbody id="highlightsTable"></tbody>
-          </table>
+      <details class="card hidden" id="highlightsSection" open>
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Failure highlights</h2>
+        </summary>
+        <div class="body">
+          <p class="meta">Top reasons consumer or provider verification failed</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Phase</th><th>Endpoint</th><th>Test / interaction</th><th>Expected</th><th>Actual</th></tr>
+              </thead>
+              <tbody id="highlightsTable"></tbody>
+            </table>
+          </div>
         </div>
-      </section>
+      </details>
 
-      <section class="card" style="margin-bottom:20px">
-        <h2>Consumer contract tests</h2>
-        <p class="meta">Consumer expectations recorded against the Pact mock server</p>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr><th>Endpoint</th><th>Test</th><th>Suite</th><th>Status</th><th>Reason</th><th>Duration</th></tr>
-            </thead>
-            <tbody id="consumerTable"></tbody>
-          </table>
+      <details class="card" id="consumerSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Consumer contract tests</h2>
+          <div class="section-badge-row" id="consumerSectionBadge"></div>
+        </summary>
+        <div class="body">
+          <p class="meta">Consumer expectations recorded against the Pact mock server</p>
+          <div class="table-controls">
+            <input type="search" id="consumerSearch" placeholder="Search endpoint / test / suite" />
+            <select id="consumerFilter">
+              <option value="all">All</option>
+              <option value="failed">Failed</option>
+              <option value="passed">Passed</option>
+            </select>
+            <span class="meta" id="consumerCount"></span>
+            <button type="button" class="secondary" id="consumerLoadMore">Load more</button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Endpoint</th><th>Test</th><th>Suite</th><th>Status</th><th>Reason</th><th>Duration</th></tr>
+              </thead>
+              <tbody id="consumerTable"></tbody>
+            </table>
+          </div>
         </div>
-      </section>
+      </details>
 
-      <section class="card" style="margin-bottom:20px">
-        <h2>Provider verification</h2>
-        <p class="meta">Live API validated against generated pact files</p>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr><th>Endpoint</th><th>Interaction</th><th>Status</th><th>Expected</th><th>Actual</th><th>Duration</th></tr>
-            </thead>
-            <tbody id="providerTable"></tbody>
-          </table>
+      <details class="card" id="providerSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Provider verification</h2>
+          <div class="section-badge-row" id="providerSectionBadge"></div>
+        </summary>
+        <div class="body">
+          <p class="meta">Live API validated against generated pact files</p>
+          <div class="table-controls">
+            <input type="search" id="providerSearch" placeholder="Search endpoint / interaction" />
+            <select id="providerFilter">
+              <option value="all">All</option>
+              <option value="failed">Failed</option>
+              <option value="passed">Passed</option>
+            </select>
+            <span class="meta" id="providerCount"></span>
+            <button type="button" class="secondary" id="providerLoadMore">Load more</button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Endpoint</th><th>Interaction</th><th>Status</th><th>Expected</th><th>Actual</th><th>Duration</th></tr>
+              </thead>
+              <tbody id="providerTable"></tbody>
+            </table>
+          </div>
         </div>
-      </section>
+      </details>
 
-      <section id="failuresSection" class="card hidden">
-        <h2>Failure details</h2>
-        <p class="meta">Consumer and provider mismatch details</p>
-        <div class="failures" id="failuresList"></div>
-      </section>
+      <details class="card" id="pactFilesSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Pact files</h2>
+          <span class="meta" id="pactFilesBadge"></span>
+        </summary>
+        <div class="body">
+          <p class="meta">Generated pact inventory for this run</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>File</th></tr>
+              </thead>
+              <tbody id="pactFilesTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="card" id="slowSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Top slow interactions</h2>
+        </summary>
+        <div class="body">
+          <p class="meta">Longest consumer and provider timings from this run</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Phase</th><th>Endpoint</th><th>Name</th><th>Duration</th><th>Status</th></tr>
+              </thead>
+              <tbody id="slowTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="card hidden" id="failuresSection" open>
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>Failure details</h2>
+        </summary>
+        <div class="body">
+          <p class="meta">Consumer and provider mismatch details</p>
+          <div class="failures" id="failuresList"></div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -545,6 +701,11 @@
   <script>
     const emptyState = document.getElementById('emptyState');
     const dashboard = document.getElementById('dashboard');
+    const PAGE_SIZE = 50;
+    let currentReport = null;
+    let consumerLimit = PAGE_SIZE;
+    let providerLimit = PAGE_SIZE;
+    let selectedServiceId = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -584,8 +745,6 @@
       TAX: { x: 680, y: 280 },
       ALC: { x: 560, y: 340 },
       DOC: { x: 430, y: 380 },
-      frontend: { x: 90, y: 230 },
-      gateway: { x: 250, y: 230 },
     };
 
     const STATUS_COLOR = {
@@ -599,12 +758,12 @@
       nodes: [
         { id: 'Client', label: 'TaxMesh Client / Pact consumer', shortLabel: 'Client', layer: 'presentation' },
         { id: 'Gateway', label: 'API Gateway :4100', shortLabel: 'Gateway', layer: 'gateway' },
-        { id: 'CLM', label: 'Client Management', shortLabel: 'CLM', layer: 'service', port: 4101, prefix: '/api/proxy/CLM' },
-        { id: 'MDM', label: 'Master Data', shortLabel: 'MDM', layer: 'service', port: 4102, prefix: '/api/proxy/MDM' },
-        { id: 'ACC', label: 'Accounting', shortLabel: 'ACC', layer: 'service', port: 4103, prefix: '/api/proxy/ACC' },
-        { id: 'TAX', label: 'Tax Computation', shortLabel: 'TAX', layer: 'service', port: 4104, prefix: '/api/proxy/TAX' },
-        { id: 'ALC', label: 'Allocations', shortLabel: 'ALC', layer: 'service', port: 4105, prefix: '/api/proxy/ALC' },
-        { id: 'DOC', label: 'Forms & Documents', shortLabel: 'DOC', layer: 'service', port: 4106, prefix: '/api/proxy/DOC' },
+        { id: 'CLM', label: 'Client Management', shortLabel: 'CLM', layer: 'service', port: 4101 },
+        { id: 'MDM', label: 'Master Data', shortLabel: 'MDM', layer: 'service', port: 4102 },
+        { id: 'ACC', label: 'Accounting', shortLabel: 'ACC', layer: 'service', port: 4103 },
+        { id: 'TAX', label: 'Tax Computation', shortLabel: 'TAX', layer: 'service', port: 4104 },
+        { id: 'ALC', label: 'Allocations', shortLabel: 'ALC', layer: 'service', port: 4105 },
+        { id: 'DOC', label: 'Forms & Documents', shortLabel: 'DOC', layer: 'service', port: 4106 },
       ],
       edges: [
         { from: 'Client', to: 'Gateway' },
@@ -650,10 +809,10 @@
         services[id].endpoints.push({ phase: 'consumer', endpoint: test.endpoint, status: test.status, reason: test.reason });
       }
       for (const item of provider.interactions || []) {
-        const id = serviceIdFromEndpoint(item.endpoint);
+        const id = serviceIdFromEndpoint(item.endpoint || item.description || item.provider);
         if (!services[id]) continue;
         bump(services[id].provider, item.status);
-        services[id].endpoints.push({ phase: 'provider', endpoint: item.endpoint, status: item.status, expected: item.expected, actual: item.actual });
+        services[id].endpoints.push({ phase: 'provider', endpoint: item.endpoint || item.description, status: item.status, expected: item.expected, actual: item.actual });
       }
       for (const s of Object.values(services)) {
         s.failed = s.consumer.failed + s.provider.failed;
@@ -663,8 +822,7 @@
         else if (consumer.ran && s.consumer.total > 0) s.status = s.consumer.failed ? 'failed' : 'passed';
       }
       const nodes = TOPOLOGY.nodes.map((node) => {
-        const svc = services[node.id];
-        if (svc) return { ...node, ...svc };
+        if (services[node.id]) return services[node.id];
         let status = 'unknown', passed = 0, failed = 0, total = 0;
         if (node.id === 'Client' && consumer.ran) {
           status = consumer.failed ? 'failed' : 'passed';
@@ -673,7 +831,7 @@
           const micro = Object.values(services).filter((n) => n.layer === 'service');
           failed = micro.reduce((sum, n) => sum + n.failed, 0);
           passed = micro.reduce((sum, n) => sum + n.passed, 0);
-          total = micro.reduce((sum, n) => sum + n.total, 0);
+          total = passed + failed;
           status = failed ? 'failed' : total ? 'passed' : 'unknown';
         }
         return { ...node, status, passed, failed, total, endpoints: [] };
@@ -686,7 +844,7 @@
         else if (from?.status === 'passed' && to?.status === 'passed') status = 'passed';
         return { ...edge, status };
       });
-      const micro = nodes.filter((n) => n.layer === 'service');
+      const micro = nodes.filter((n) => n.layer === 'service' || n.layer === 'gateway');
       return {
         nodes,
         edges,
@@ -694,15 +852,12 @@
           healthy: micro.filter((n) => n.status === 'passed').length,
           failed: micro.filter((n) => n.status === 'failed').length,
           unknown: micro.filter((n) => n.status === 'unknown').length,
-          total: micro.length,
         },
       };
     }
 
     function enrichServiceMap(serviceMap) {
-      if (!serviceMap) {
-        return null;
-      }
+      if (!serviceMap) return null;
       const metaById = Object.fromEntries(TOPOLOGY.nodes.map((node) => [node.id, node]));
       return {
         ...serviceMap,
@@ -715,8 +870,6 @@
       };
     }
 
-    let selectedServiceId = null;
-
     function renderServiceDetail(node) {
       const panel = document.getElementById('serviceDetail');
       if (!node) {
@@ -726,13 +879,13 @@
       panel.classList.remove('hidden');
       const endpoints = (node.endpoints || []).map((ep) => `
         <div class="endpoint-row">
-          <div><code>${ep.endpoint || '—'}</code> <span style="color:var(--muted)">(${ep.phase})</span></div>
+          <div><code>${escapeHtml(ep.endpoint || '—')}</code> <span style="color:var(--muted)">(${escapeHtml(ep.phase)})</span></div>
           ${badge(ep.status)}
         </div>
       `).join('') || '<p class="meta">No contract-tested endpoints for this node.</p>';
 
       panel.innerHTML = `
-        <h3>${node.label} ${badge(node.status)}</h3>
+        <h3>${escapeHtml(node.label)} ${badge(node.status)}</h3>
         <p class="meta">${node.passed}/${node.total} passed · ${node.failed} failed</p>
         ${node.port ? `<p class="meta">Service port: <code>${node.port}</code></p>` : ''}
         <div class="endpoint-list">${endpoints}</div>
@@ -756,7 +909,6 @@
         <div class="legend-item"><span class="legend-dot ${status}"></span>${label}: <strong>${count}</strong></div>
       `).join('');
 
-      // FinVault-style: only star topology edges on the canvas (skip CT-* mesh edges)
       const mapEdges = (serviceMap.edges || []).filter((edge) => !edge.id || !/^CT-/i.test(String(edge.id)));
       const edges = mapEdges.map((edge) => {
         const from = MAP_POSITIONS[edge.from];
@@ -777,13 +929,12 @@
           <g class="map-node ${node.status} ${selected}" data-id="${node.id}" transform="translate(${pos.x}, ${pos.y})">
             <circle class="node-ring" r="42" fill="none" stroke="${color}" stroke-width="2"/>
             <circle r="34" fill="#ffffff" stroke="${color}" stroke-width="4"/>
-            <text text-anchor="middle" y="6" font-size="11" font-weight="600" fill="#374151" font-family="Segoe UI,sans-serif">${node.shortLabel || node.label}</text>
+            <text text-anchor="middle" y="6" font-size="11" font-weight="600" fill="#374151" font-family="Segoe UI,sans-serif">${escapeHtml(node.shortLabel || node.label)}</text>
             <text text-anchor="middle" y="54" font-size="11" fill="${color}" font-weight="700" font-family="Segoe UI,sans-serif">${count}</text>
           </g>`;
       }).join('');
 
       canvas.innerHTML = `<svg viewBox="0 0 780 460" role="img" aria-label="Microservice health map">${edges}${nodes}</svg>`;
-
       canvas.querySelectorAll('.map-node').forEach((group) => {
         group.addEventListener('click', () => {
           selectedServiceId = group.dataset.id;
@@ -794,13 +945,180 @@
       });
     }
 
+    function filterRows(rows, filter, query) {
+      const q = String(query || '').toLowerCase().trim();
+      return rows.filter((row) => {
+        const statusOk = filter === 'all' || row.status === filter;
+        const text = `${row.endpoint || ''} ${row.name || ''} ${row.description || ''} ${row.suite || ''}`.toLowerCase();
+        const searchOk = !q || text.includes(q);
+        return statusOk && searchOk;
+      });
+    }
+
+    function renderConsumerTable() {
+      const consumer = currentReport?.consumer || {};
+      const rows = (consumer.tests || []).map((test) => ({
+        endpoint: test.endpoint || '—',
+        name: test.name || '',
+        suite: basename(test.suite),
+        status: test.status,
+        reason: test.status === 'failed' ? (test.reason || '-') : '—',
+        durationMs: test.durationMs || 0,
+      }));
+      const filter = document.getElementById('consumerFilter').value;
+      const query = document.getElementById('consumerSearch').value;
+      const matched = filterRows(rows, filter, query);
+      const visible = matched.slice(0, consumerLimit);
+      document.getElementById('consumerCount').textContent = `Showing ${visible.length} of ${matched.length}`;
+      document.getElementById('consumerLoadMore').classList.toggle('hidden', visible.length >= matched.length);
+      document.getElementById('consumerTable').innerHTML = visible.map((test) => `
+        <tr>
+          <td><code>${escapeHtml(test.endpoint)}</code></td>
+          <td>${escapeHtml(test.name)}</td>
+          <td>${escapeHtml(test.suite)}</td>
+          <td>${badge(test.status)}</td>
+          <td>${escapeHtml(test.reason)}</td>
+          <td>${test.durationMs}ms</td>
+        </tr>
+      `).join('') || '<tr><td colspan="6">No consumer results</td></tr>';
+    }
+
+    function renderProviderTable() {
+      const provider = currentReport?.provider || {};
+      const rows = (provider.interactions || []).map((item) => ({
+        endpoint: item.endpoint || '—',
+        description: item.description || '',
+        status: item.status,
+        expected: item.expected || '—',
+        actual: item.actual || '—',
+        durationMs: item.durationMs ?? 0,
+      }));
+      const filter = document.getElementById('providerFilter').value;
+      const query = document.getElementById('providerSearch').value;
+      const matched = filterRows(rows, filter, query);
+      const visible = matched.slice(0, providerLimit);
+      document.getElementById('providerCount').textContent = `Showing ${visible.length} of ${matched.length}`;
+      document.getElementById('providerLoadMore').classList.toggle('hidden', visible.length >= matched.length);
+
+      const providerEmpty =
+        provider.ran === false
+          ? (provider.skippedReason || 'Provider verification was not run.')
+          : 'No provider interaction details available.';
+
+      document.getElementById('providerTable').innerHTML = visible.map((item) => `
+        <tr>
+          <td><code>${escapeHtml(item.endpoint)}</code></td>
+          <td>${escapeHtml(item.description)}</td>
+          <td>${badge(item.status)}</td>
+          <td>${escapeHtml(item.expected)}</td>
+          <td>${escapeHtml(item.actual)}</td>
+          <td>${item.durationMs}ms</td>
+        </tr>
+      `).join('') || `<tr><td colspan="6">${escapeHtml(providerEmpty)}</td></tr>`;
+    }
+
+    function setSectionOpen(id, open) {
+      const el = document.getElementById(id);
+      if (el) el.open = !!open;
+    }
+
+    function xmlEscape(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function sheetXml(name, headers, rows) {
+      const headerRow = `<Row>${headers.map((h) => `<Cell><Data ss:Type="String">${xmlEscape(h)}</Data></Cell>`).join('')}</Row>`;
+      const body = rows.map((row) => `<Row>${row.map((cell) => {
+        const isNum = typeof cell === 'number' && Number.isFinite(cell);
+        return `<Cell><Data ss:Type="${isNum ? 'Number' : 'String'}">${xmlEscape(cell)}</Data></Cell>`;
+      }).join('')}</Row>`).join('');
+      return `<Worksheet ss:Name="${xmlEscape(name)}"><Table>${headerRow}${body}</Table></Worksheet>`;
+    }
+
+    function buildClientExcel(report) {
+      const consumer = report.consumer || {};
+      const provider = report.provider || {};
+      const env = report.environment || {};
+      const target = provider.providerBaseUrl || env.GATEWAY_BASE_URL || env.providerUrl || 'n/a';
+      const sheets = [
+        sheetXml('Summary', ['Field', 'Value'], [
+          ['Project', report.project],
+          ['Generated At', report.generatedAt],
+          ['Overall Status', report.overallStatus],
+          ['Consumer', `${consumer.passed}/${consumer.total}`],
+          ['Provider', `${provider.passed}/${provider.total}`],
+          ['Target URL', target],
+          ['Build ID', env.BUILD_BUILDID || ''],
+          ['Branch', env.BUILD_SOURCEBRANCH || ''],
+          ['Commit', env.BUILD_SOURCEVERSION || ''],
+        ]),
+        sheetXml('Service Health', ['Service', 'Layer', 'Status', 'Passed', 'Failed', 'Total'],
+          (report.serviceMap?.nodes || []).map((n) => [n.id, n.layer || '', n.status, n.passed, n.failed, n.total])),
+        sheetXml('CT Matrix', ['CT ID', 'From', 'To', 'Status'],
+          (report.serviceMap?.contractEdges || []).map((e) => [e.id || '', e.from, e.to, e.status || ''])),
+        sheetXml('Consumer Tests', ['Suite', 'Name', 'Endpoint', 'Status', 'DurationMs', 'Reason'],
+          (consumer.tests || []).map((t) => [basename(t.suite), t.name, t.endpoint || '', t.status, t.durationMs || 0, t.status === 'failed' ? (t.reason || '') : ''])),
+        sheetXml('Provider Interactions', ['Provider', 'Description', 'Endpoint', 'Status', 'Expected', 'Actual', 'DurationMs'],
+          (provider.interactions || []).map((i) => [i.provider || '', i.description || '', i.endpoint || '', i.status, i.expected || '', i.actual || '', i.durationMs || 0])),
+        sheetXml('Pact Files', ['File'], (report.pactFiles || []).map((f) => [f])),
+        sheetXml('Environment', ['Key', 'Value'], Object.entries(env)),
+      ];
+      return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+${sheets.join('\n')}
+</Workbook>`;
+    }
+
+    async function downloadExcel() {
+      if (!currentReport) return;
+      const candidates = [
+        'data/TaxMesh-Contract-Report.xlsx',
+        'TaxMesh-Contract-Report.xlsx',
+      ];
+      for (const href of candidates) {
+        try {
+          const res = await fetch(href);
+          if (res.ok) {
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'TaxMesh-Contract-Report.xlsx';
+            a.click();
+            URL.revokeObjectURL(url);
+            return;
+          }
+        } catch {
+          // try next / fallback
+        }
+      }
+      const xml = buildClientExcel(currentReport);
+      const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'TaxMesh-Contract-Report.xls';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     function renderReport(report) {
+      currentReport = report;
+      consumerLimit = PAGE_SIZE;
+      providerLimit = PAGE_SIZE;
       emptyState.classList.add('hidden');
       dashboard.classList.remove('hidden');
 
       const overall = report.overallStatus || 'unknown';
       const overallCard = document.getElementById('overallCard');
       overallCard.className = `card overall ${overall}`;
+      overallCard.style.marginBottom = '0';
       document.getElementById('overallRing').textContent = overall.toUpperCase();
       document.getElementById('generatedAt').textContent = `Generated ${formatDate(report.generatedAt)}`;
 
@@ -821,6 +1139,14 @@
       document.getElementById('headerSubtitle').textContent =
         `Target ${target} · ${overall.toUpperCase()} · ${formatDate(report.generatedAt)}`;
 
+      const buildBits = [
+        env.BUILD_BUILDID ? `Build ${env.BUILD_BUILDID}` : '',
+        env.BUILD_SOURCEBRANCH ? env.BUILD_SOURCEBRANCH.replace(/^refs\/heads\//, '') : '',
+        env.BUILD_SOURCEVERSION ? `commit ${String(env.BUILD_SOURCEVERSION).slice(0, 8)}` : '',
+        env.RUN_MODE ? `mode ${env.RUN_MODE}` : '',
+      ].filter(Boolean);
+      document.getElementById('buildMeta').textContent = buildBits.join(' · ');
+
       document.getElementById('consumerScore').textContent = `${consumer.passed || 0}/${consumer.total || 0}`;
       document.getElementById('providerScore').textContent = `${provider.passed || 0}/${provider.total || 0}`;
       document.getElementById('consumerBar').style.width = `${pct(consumer.passed, consumer.total)}%`;
@@ -839,7 +1165,6 @@
       renderServiceMap(serviceMap);
       document.getElementById('serviceDetail').classList.add('hidden');
 
-      // FinVault-style environment panel (TaxMesh labels)
       document.getElementById('envList').innerHTML = [
         ['Gateway URL', env.GATEWAY_BASE_URL || env.TAXMESH_BASE_URL || env.providerUrl],
         ['Provider URL', env.providerUrl || provider.providerBaseUrl],
@@ -849,18 +1174,22 @@
         ['TAX URL', env.URL_TAX],
         ['ALC URL', env.URL_ALC],
         ['DOC URL', env.URL_DOC],
+        ['Build ID', env.BUILD_BUILDID],
+        ['Branch', env.BUILD_SOURCEBRANCH],
+        ['Commit', env.BUILD_SOURCEVERSION],
+        ['Run mode', env.RUN_MODE],
         ['Consumer', env.consumer || 'TaxMesh Pact consumers'],
         ['Provider', env.provider || 'TaxMesh APIs'],
         ['Verification base', provider.providerBaseUrl || target],
-        ['Swagger', 'GET /api/contracts · GET /openapi.json'],
       ].map(([label, value]) => `
-        <div class="env-item"><span>${label}</span><code>${value || 'n/a'}</code></div>
+        <div class="env-item"><span>${label}</span><code>${escapeHtml(value || 'n/a')}</code></div>
       `).join('');
 
-      const ctEdges = serviceMap?.contractEdges || (report.serviceMap && report.serviceMap.contractEdges) || [];
+      const ctEdges = serviceMap?.contractEdges || report.serviceMap?.contractEdges || [];
       const ctSection = document.getElementById('ctMatrixSection');
       if (ctEdges.length) {
         ctSection.classList.remove('hidden');
+        document.getElementById('ctMatrixBadge').textContent = `${ctEdges.length} edges`;
         document.getElementById('ctMatrixTable').innerHTML = ctEdges.map((edge) => `
           <tr>
             <td><code>${escapeHtml(edge.id || '—')}</code></td>
@@ -881,12 +1210,13 @@
         ['Overall', overall],
         ['Consumer failed', consumer.failed || 0],
         ['Provider failed', provider.failed || 0],
+        ['Pact files', (report.pactFiles || []).length],
       ].map(([label, value]) => `
-        <div class="env-item"><span>${label}</span><code>${value || 'n/a'}</code></div>
+        <div class="env-item"><span>${label}</span><code>${escapeHtml(value || 'n/a')}</code></div>
       `).join('');
 
       const phaseRow = (label, value, badgeHtml = '') => `
-        <div class="env-item"><span>${label}</span><code>${badgeHtml || value || 'n/a'}</code></div>`;
+        <div class="env-item"><span>${label}</span><code>${badgeHtml || escapeHtml(value || 'n/a')}</code></div>`;
 
       document.getElementById('consumerPhaseSummary').innerHTML = [
         phaseRow('Status', consumer.status, badge(consumer.status)),
@@ -902,34 +1232,52 @@
         phaseRow('Verification URL', provider.providerBaseUrl),
       ].join('');
 
-      document.getElementById('consumerTable').innerHTML = (consumer.tests || []).map((test) => `
-        <tr>
-          <td><code>${test.endpoint || '—'}</code></td>
-          <td>${test.name}</td>
-          <td>${basename(test.suite)}</td>
-          <td>${badge(test.status)}</td>
-          <td>${test.status === 'failed' ? (test.reason || '-') : '—'}</td>
-          <td>${test.durationMs || 0}ms</td>
-        </tr>
-      `).join('') || '<tr><td colspan="6">No consumer results</td></tr>';
+      document.getElementById('consumerSectionBadge').innerHTML =
+        `${badge(consumer.status)} <span class="meta">${consumer.passed || 0}/${consumer.total || 0}</span>`;
+      document.getElementById('providerSectionBadge').innerHTML =
+        `${badge(provider.status)} <span class="meta">${provider.passed || 0}/${provider.total || 0}</span>`;
 
-      const providerEmpty =
-        provider.ran === false
-          ? (provider.skippedReason || 'Provider verification was not run.')
-          : provider.status === 'passed' && (provider.interactions || []).length === 0 && provider.rawOutput?.length
-            ? provider.rawOutput.join(' ')
-            : 'No provider interaction details available.';
+      setSectionOpen('consumerSection', (consumer.failed || 0) > 0);
+      setSectionOpen('providerSection', (provider.failed || 0) > 0);
+      setSectionOpen('envSection', false);
+      setSectionOpen('ctMatrixSection', false);
+      setSectionOpen('pactFilesSection', false);
+      setSectionOpen('slowSection', false);
+      setSectionOpen('mapSection', true);
 
-      document.getElementById('providerTable').innerHTML = (provider.interactions || []).map((item) => `
+      if ((consumer.failed || 0) > 0) {
+        document.getElementById('consumerFilter').value = 'failed';
+      }
+      if ((provider.failed || 0) > 0) {
+        document.getElementById('providerFilter').value = 'failed';
+      }
+
+      renderConsumerTable();
+      renderProviderTable();
+
+      const pactFiles = report.pactFiles || [];
+      document.getElementById('pactFilesBadge').textContent = `${pactFiles.length} files`;
+      document.getElementById('pactFilesTable').innerHTML = pactFiles.map((file) => `
+        <tr><td><code>${escapeHtml(file)}</code></td></tr>
+      `).join('') || '<tr><td>No pact files</td></tr>';
+
+      const slowConsumer = [...(consumer.tests || [])]
+        .sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0))
+        .slice(0, 10)
+        .map((t) => ({ phase: 'Consumer', endpoint: t.endpoint || '—', name: t.name, durationMs: t.durationMs || 0, status: t.status }));
+      const slowProvider = [...(provider.interactions || [])]
+        .sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0))
+        .slice(0, 10)
+        .map((t) => ({ phase: 'Provider', endpoint: t.endpoint || '—', name: t.description, durationMs: t.durationMs || 0, status: t.status }));
+      document.getElementById('slowTable').innerHTML = [...slowConsumer, ...slowProvider].map((row) => `
         <tr>
-          <td><code>${item.endpoint || '—'}</code></td>
-          <td>${item.description}</td>
-          <td>${badge(item.status)}</td>
-          <td>${item.expected || '—'}</td>
-          <td>${item.actual || '—'}</td>
-          <td>${item.duration || '—'}</td>
+          <td>${escapeHtml(row.phase)}</td>
+          <td><code>${escapeHtml(row.endpoint)}</code></td>
+          <td>${escapeHtml(row.name)}</td>
+          <td>${row.durationMs}ms</td>
+          <td>${badge(row.status)}</td>
         </tr>
-      `).join('') || `<tr><td colspan="6">${providerEmpty}</td></tr>`;
+      `).join('') || '<tr><td colspan="5">No timing data</td></tr>';
 
       const highlights = [];
       for (const failure of consumer.failures || []) {
@@ -954,7 +1302,6 @@
             : '')
           .filter(Boolean)
           .join('; ') || failure.reason || '—';
-
         highlights.push({
           phase: 'Provider',
           name: failure.interaction,
@@ -967,7 +1314,8 @@
       const highlightsSection = document.getElementById('highlightsSection');
       if (highlights.length) {
         highlightsSection.classList.remove('hidden');
-        document.getElementById('highlightsTable').innerHTML = highlights.slice(0, 8).map((item) => `
+        highlightsSection.open = true;
+        document.getElementById('highlightsTable').innerHTML = highlights.map((item) => `
           <tr>
             <td>${escapeHtml(item.phase)}</td>
             <td><code>${escapeHtml(item.endpoint || '—')}</code></td>
@@ -999,6 +1347,7 @@
       const failuresSection = document.getElementById('failuresSection');
       if (allFailures.length) {
         failuresSection.classList.remove('hidden');
+        failuresSection.open = true;
         document.getElementById('failuresList').innerHTML = allFailures.map((failure) => `
           <div class="failure">
             <h4>${escapeHtml(failure.title)}</h4>
@@ -1024,23 +1373,17 @@
 
     function readEmbeddedReport() {
       const embedded = document.getElementById('pact-report-data');
-      if (!embedded?.textContent?.trim()) {
-        return null;
-      }
-
+      if (!embedded?.textContent?.trim()) return null;
       const raw = embedded.textContent.trim();
       if (embedded.dataset.encoding === 'base64') {
         return JSON.parse(atob(raw));
       }
-
       return JSON.parse(raw);
     }
 
     async function fetchReportJson(path) {
       const response = await fetch(path + '?ts=' + Date.now());
-      if (!response.ok) {
-        return null;
-      }
+      if (!response.ok) return null;
       return response.json();
     }
 
@@ -1050,12 +1393,10 @@
         renderReport(embedded);
         return;
       }
-
       if (window.__PACT_REPORT__) {
         renderReport(window.__PACT_REPORT__);
         return;
       }
-
       for (const reportPath of ['data/latest.json', 'data/report.json']) {
         try {
           const report = await fetchReportJson(reportPath);
@@ -1064,15 +1405,27 @@
             return;
           }
         } catch {
-          // try next source
+          // try next
         }
       }
-
       emptyState.classList.remove('hidden');
       dashboard.classList.add('hidden');
     }
 
     document.getElementById('refreshBtn').addEventListener('click', loadLatest);
+    document.getElementById('excelBtn').addEventListener('click', downloadExcel);
+    document.getElementById('expandAllBtn').addEventListener('click', () => {
+      document.querySelectorAll('#dashboard details.card').forEach((d) => { d.open = true; });
+    });
+    document.getElementById('collapseAllBtn').addEventListener('click', () => {
+      document.querySelectorAll('#dashboard details.card').forEach((d) => { d.open = false; });
+    });
+    document.getElementById('consumerSearch').addEventListener('input', () => { consumerLimit = PAGE_SIZE; renderConsumerTable(); });
+    document.getElementById('consumerFilter').addEventListener('change', () => { consumerLimit = PAGE_SIZE; renderConsumerTable(); });
+    document.getElementById('providerSearch').addEventListener('input', () => { providerLimit = PAGE_SIZE; renderProviderTable(); });
+    document.getElementById('providerFilter').addEventListener('change', () => { providerLimit = PAGE_SIZE; renderProviderTable(); });
+    document.getElementById('consumerLoadMore').addEventListener('click', () => { consumerLimit += PAGE_SIZE; renderConsumerTable(); });
+    document.getElementById('providerLoadMore').addEventListener('click', () => { providerLimit += PAGE_SIZE; renderProviderTable(); });
     document.getElementById('fileInput').addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;

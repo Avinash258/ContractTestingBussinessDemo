@@ -4,6 +4,8 @@
  *   npx ts-node --transpile-only scripts/run-contract-ci.ts
  *   npx ts-node --transpile-only scripts/run-contract-ci.ts --consumer-only
  *   npx ts-node --transpile-only scripts/run-contract-ci.ts --provider-only
+ *   npx ts-node --transpile-only scripts/run-contract-ci.ts --services=CLM,MDM
+ *   npx ts-node --transpile-only scripts/run-contract-ci.ts --services=CLM,MDM --consumer-only
  */
 import fs from 'fs';
 import path from 'path';
@@ -23,22 +25,160 @@ const reportsDir = ensureReportsDir();
 const consumerOnly = process.argv.includes('--consumer-only');
 const providerOnly = process.argv.includes('--provider-only');
 
+const ALL_PROVIDERS: Array<ServiceId | 'Gateway'> = [
+  'CLM',
+  'MDM',
+  'ACC',
+  'TAX',
+  'ALC',
+  'DOC',
+  'Gateway',
+];
+
+/** Consumer Jest path fragments that exercise a given service pair / producer. */
+const CONSUMER_SPEC_FRAGMENTS: Record<string, string[]> = {
+  CLM: ['clm-mdm.ct00'],
+  MDM: ['clm-mdm.ct00'],
+  ACC: ['mdm-acc.ct01', 'all-contracts.ct05-17'],
+  TAX: ['mdm-tax.ct02', 'all-contracts.ct05-17'],
+  ALC: ['mdm-alc.ct03', 'all-contracts.ct05-17'],
+  DOC: ['mdm-doc.ct04', 'all-contracts.ct05-17'],
+  Gateway: [
+    'gateway.flow',
+    'gateway.contracts-by-id',
+    'gateway.filing-mutations',
+    'service-discovery',
+    'consume-by-id',
+  ],
+};
+
+function parseServicesArg(): Array<ServiceId | 'Gateway'> | null {
+  const fromEnv = String(process.env.PACT_SERVICES || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const arg = process.argv.find((a) => a.startsWith('--services='));
+  const fromArg = arg
+    ? arg
+        .slice('--services='.length)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  const raw = fromArg.length ? fromArg : fromEnv;
+  if (!raw.length || raw.some((s) => /^all$/i.test(s))) return null;
+
+  const selected: Array<ServiceId | 'Gateway'> = [];
+  for (const token of raw) {
+    const upper = token.toUpperCase();
+    if (upper === 'GATEWAY') {
+      selected.push('Gateway');
+      continue;
+    }
+    if ((Object.keys(SERVICES) as string[]).includes(upper)) {
+      selected.push(upper as ServiceId);
+      continue;
+    }
+    throw new Error(
+      `Unknown service "${token}". Use: ${ALL_PROVIDERS.join(', ')} or all`
+    );
+  }
+  return selected;
+}
+
+const selectedServices = parseServicesArg();
+const scopedRun = !!selectedServices?.length;
+
+function consumerTestPathPattern(): string {
+  if (!selectedServices?.length) return 'tests/consumer';
+  const fragments = new Set<string>();
+  for (const service of selectedServices) {
+    for (const frag of CONSUMER_SPEC_FRAGMENTS[service] || []) {
+      fragments.add(frag);
+    }
+  }
+  // CLM+MDM scoped pair → CT-00 only (no gateway / other CT suite noise)
+  if (
+    selectedServices.length === 2 &&
+    selectedServices.includes('CLM') &&
+    selectedServices.includes('MDM')
+  ) {
+    return 'clm-mdm.ct00';
+  }
+  return Array.from(fragments).join('|') || 'tests/consumer';
+}
+
+function providersToRun(): Array<ServiceId | 'Gateway'> {
+  if (!selectedServices?.length) return ALL_PROVIDERS;
+  return selectedServices.filter((s) => ALL_PROVIDERS.includes(s));
+}
+
 function listPactFiles(): string[] {
   const dir = config.pactsDir;
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  if (!selectedServices?.length) return files;
+
+  const allowedProviders = new Set(
+    selectedServices.map((s) =>
+      s === 'Gateway' ? 'TaxMesh-Gateway' : SERVICES[s].pactProvider
+    )
+  );
+  const allowedConsumers = new Set(
+    selectedServices.map((s) =>
+      s === 'Gateway' ? 'TaxMesh-Client' : `TaxMesh-${s}`
+    )
+  );
+  // Also keep classic MDM←CLM consumer naming
+  allowedConsumers.add('TaxMesh-MDM');
+  allowedConsumers.add('TaxMesh-CLM');
+
+  return files.filter((file) => {
+    try {
+      const pact = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')) as {
+        provider?: { name?: string };
+        consumer?: { name?: string };
+      };
+      const provider = pact.provider?.name || '';
+      const consumer = pact.consumer?.name || '';
+      return allowedProviders.has(provider) || allowedConsumers.has(consumer);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function clearPactsDirForScopedRun() {
+  if (!scopedRun) return;
+  const dir = config.pactsDir;
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    return;
+  }
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+    fs.unlinkSync(path.join(dir, file));
+  }
+  console.log(`Cleared previous pact files in ${dir} (scoped run)`);
 }
 
 function runConsumer(): { exitCode: number; results: any | null } {
   const outFile = path.join(reportsDir, 'consumer-results.json');
-  console.log('\n=== Consumer contract tests ===\n');
+  const pattern = consumerTestPathPattern();
+  console.log('\n=== Consumer contract tests ===');
+  if (scopedRun) {
+    console.log(`Scoped services: ${selectedServices!.join(', ')}`);
+    console.log(`Jest testPathPatterns: ${pattern}\n`);
+    clearPactsDirForScopedRun();
+  } else {
+    console.log('');
+  }
   const result = spawnSync(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     [
       'jest',
       '--runInBand',
       '--ci',
-      '--testPathPatterns=tests/consumer',
+      `--testPathPatterns=${pattern}`,
       '--json',
       `--outputFile=${outFile}`,
     ],
@@ -132,15 +272,10 @@ function runOneProvider(service: ServiceId | 'Gateway'): {
 }
 
 function runProviders() {
-  const services: Array<ServiceId | 'Gateway'> = [
-    'CLM',
-    'MDM',
-    'ACC',
-    'TAX',
-    'ALC',
-    'DOC',
-    'Gateway',
-  ];
+  const services = providersToRun();
+  console.log(
+    `\n=== Provider verification (${services.join(', ')}) ===\n`
+  );
   return services.map(runOneProvider);
 }
 
@@ -201,21 +336,36 @@ async function main() {
       URL_TAX: process.env.URL_TAX || config.serviceBaseUrl('TAX'),
       URL_ALC: process.env.URL_ALC || config.serviceBaseUrl('ALC'),
       URL_DOC: process.env.URL_DOC || config.serviceBaseUrl('DOC'),
-      consumer: 'TaxMesh Pact consumers',
-      provider: 'TaxMesh APIs (Gateway + CLM…DOC)',
+      consumer: scopedRun
+        ? `TaxMesh Pact consumers (${selectedServices!.join('+')})`
+        : 'TaxMesh Pact consumers',
+      provider: scopedRun
+        ? `TaxMesh APIs (${selectedServices!.join(', ')})`
+        : 'TaxMesh APIs (Gateway + CLM…DOC)',
       BUILD_BUILDID: process.env.BUILD_BUILDID || '',
       BUILD_SOURCEBRANCH: process.env.BUILD_SOURCEBRANCH || '',
+      BUILD_SOURCEVERSION: process.env.BUILD_SOURCEVERSION || '',
+      RUN_MODE: [
+        consumerOnly ? 'consumer-only' : providerOnly ? 'provider-only' : 'full',
+        scopedRun ? `services=${selectedServices!.join(',')}` : 'services=all',
+      ].join('+'),
+      PACT_SERVICES: scopedRun ? selectedServices!.join(',') : 'all',
     },
   });
 
-  const { jsonPath, htmlPath, interactivePath, dashboardZipPath } = writeReports(report);
+  const { jsonPath, htmlPath, interactivePath, dashboardZipPath, excelPath } =
+    await writeReports(report);
   console.log('\n=== Pact report (ContractTestDemo / EY_Demo style) ===');
+  console.log(
+    `  Scope   : ${scopedRun ? selectedServices!.join(', ') : 'all services'}`
+  );
   console.log(`  Overall : ${report.overallStatus.toUpperCase()}`);
   console.log(`  Consumer: ${report.consumer.passed}/${report.consumer.total}`);
   console.log(`  Provider: ${report.provider.passed}/${report.provider.total}`);
   console.log(`  JSON    : ${jsonPath}`);
   console.log(`  HTML    : ${htmlPath}`);
   console.log(`  Map     : ${interactivePath}`);
+  if (excelPath) console.log(`  Excel   : ${excelPath}`);
   if (dashboardZipPath) console.log(`  Zip     : ${dashboardZipPath}`);
   console.log(`  Dashboard data: dashboard/data/latest.json`);
 

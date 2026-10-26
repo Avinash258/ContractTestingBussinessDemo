@@ -14,6 +14,16 @@ parameters:
     type: string
     default: 'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
 
+  - name: services
+    displayName: 'Services to run (CLM,MDM | all | comma list)'
+    type: string
+    default: 'CLM,MDM'
+
+  - name: runSwaggerCoverageGate
+    displayName: 'Run full Swagger coverage gate (skip for CLM+MDM-only)'
+    type: boolean
+    default: false
+
   - name: reportEmailTo
     displayName: 'Send HTML report to'
     type: string
@@ -35,12 +45,13 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'
   PACT_DO_NOT_TRACK: 'true'
   # EY_Demo-style: put target URL in YAML variables (auto-injected into scripts)
   GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
   TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
   PACT_PROVIDER_URL: ${{ parameters.gatewayBaseUrl }}
+  PACT_SERVICES: ${{ parameters.services }}
   REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
   # Sender = Gmail (pinned). Only SMTP_PASS comes from a secret pipeline variable.
   SMTP_HOST: 'smtp.gmail.com'
@@ -53,7 +64,7 @@ stages:
     displayName: 'Pact Contract Tests'
     jobs:
       - job: ConsumerContracts
-        displayName: 'Consumer — generate pact files'
+        displayName: 'Consumer — generate pact files (${{ parameters.services }})'
         steps:
           - checkout: self
 
@@ -65,12 +76,16 @@ stages:
           - script: npm ci
             displayName: 'Install dependencies'
 
-          - script: npm run test:contract:consumer-only
-            displayName: 'Run consumer contract tests'
+          - script: |
+              set -euo pipefail
+              echo "Consumer scope: ${PACT_SERVICES}"
+              npm run test:contract:consumer-only -- --services="${PACT_SERVICES}"
+            displayName: 'Run consumer contract tests (${{ parameters.services }})'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
+              PACT_SERVICES: $(PACT_SERVICES)
 
-          # Same rules as ContractCoverageAuditor / TestCaseGenratorViaSwagger — fail on uncovered OpenAPI ops
+          # Full OpenAPI gate only when explicitly enabled (skipped for CLM+MDM-only runs)
           - script: |
               set -euo pipefail
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
@@ -79,6 +94,7 @@ stages:
               echo "Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
               npm run test:swagger-coverage:ci
             displayName: 'Swagger coverage gate (OpenAPI ↔ Pact)'
+            condition: and(succeeded(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
             env:
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
@@ -98,7 +114,7 @@ stages:
             condition: succeededOrFailed()
 
       - job: ProviderVerification
-        displayName: 'Provider — verify API against contracts'
+        displayName: 'Provider — verify API (${{ parameters.services }})'
         dependsOn: ConsumerContracts
         condition: succeeded()
         steps:
@@ -126,7 +142,7 @@ stages:
               ls -la pacts reports || true
             displayName: 'Copy pact files into workspace'
 
-          # Swagger: getGatewayHealth + listContracts (api-docs #/Gateway/listContracts)
+          # Health: gateway + scoped service proxies (default CLM + MDM)
           - script: |
               set -euo pipefail
               GATEWAY="${GATEWAY_BASE_URL:-${PACT_PROVIDER_URL:-${TAXMESH_BASE_URL:-}}}"
@@ -134,10 +150,10 @@ stages:
               # Allow pasting a full api-docs URL by mistake — strip to origin
               GATEWAY="${GATEWAY%%/api-docs*}"
               GATEWAY="${GATEWAY%/}"
+              SERVICES="${PACT_SERVICES:-CLM,MDM}"
               echo "Swagger-aligned pre-check against: $GATEWAY"
+              echo "  Scope         : $SERVICES"
               echo "  GET $GATEWAY/api/health          (getGatewayHealth)"
-              echo "  GET $GATEWAY/api/contracts       (listContracts)"
-              echo "  GET $GATEWAY/api/proxy/CLM/health (Service CLM proxy)"
               if [ -z "$GATEWAY" ]; then
                 echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is empty. Set Run pipeline → TaxMesh gateway origin."
                 exit 1
@@ -145,13 +161,21 @@ stages:
               curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 \
                 "${GATEWAY}/api/health" | head -c 400
               echo
-              curl -sf --retry 5 --retry-delay 2 --connect-timeout 15 \
-                "${GATEWAY}/api/contracts" | head -c 400
-              echo
-              curl -sf --retry 5 --retry-delay 2 --connect-timeout 15 \
-                "${GATEWAY}/api/proxy/CLM/health" | head -c 400
-              echo
-            displayName: 'Health check — TaxMesh gateway (Swagger)'
+              IFS=',' read -ra SVC_ARR <<< "$SERVICES"
+              for raw in "${SVC_ARR[@]}"; do
+                svc="$(echo "$raw" | tr '[:lower:]' '[:upper:]' | xargs)"
+                if [ -z "$svc" ] || [ "$svc" = "ALL" ] || [ "$svc" = "GATEWAY" ]; then
+                  continue
+                fi
+                echo "  GET $GATEWAY/api/proxy/${svc}/health"
+                curl -sf --retry 5 --retry-delay 2 --connect-timeout 15 \
+                  "${GATEWAY}/api/proxy/${svc}/health" | head -c 400
+                echo
+              done
+            displayName: 'Health check — gateway + scoped services'
+            env:
+              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
+              PACT_SERVICES: $(PACT_SERVICES)
 
           - script: |
               set -euo pipefail
@@ -160,16 +184,19 @@ stages:
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
               export PACT_PROVIDER_URL="${GATEWAY_BASE_URL}"
+              export PACT_SERVICES="${PACT_SERVICES:-CLM,MDM}"
               echo "Provider verify against gateway: $GATEWAY_BASE_URL"
-              echo "  listContracts : $GATEWAY_BASE_URL/api/contracts"
-              echo "  CLM proxy     : $GATEWAY_BASE_URL/api/proxy/CLM  (Swagger uppercase)"
-              npm run test:contract:provider-only
-            displayName: 'Run provider verification + generate report'
+              echo "  Scope         : $PACT_SERVICES"
+              echo "  CLM proxy     : $GATEWAY_BASE_URL/api/proxy/CLM"
+              echo "  MDM proxy     : $GATEWAY_BASE_URL/api/proxy/MDM"
+              npm run test:contract:provider-only -- --services="${PACT_SERVICES}"
+            displayName: 'Run provider verification + generate report (${{ parameters.services }})'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
               PACT_PROVIDER_URL: $(GATEWAY_BASE_URL)
+              PACT_SERVICES: $(PACT_SERVICES)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)

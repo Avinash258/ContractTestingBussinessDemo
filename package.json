@@ -16,15 +16,19 @@
     "test:provider:doc": "ts-node --transpile-only tests/provider/doc.provider.verify.ts",
     "test:provider:gateway": "ts-node --transpile-only tests/provider/gateway.provider.verify.ts",
     "test:contract": "ts-node --transpile-only scripts/run-contract-ci.ts",
+    "test:contract:clm-mdm": "ts-node --transpile-only scripts/run-contract-ci.ts --services=CLM,MDM",
     "test:contract:consumer-only": "ts-node --transpile-only scripts/run-contract-ci.ts --consumer-only",
+    "test:contract:consumer-only:clm-mdm": "ts-node --transpile-only scripts/run-contract-ci.ts --consumer-only --services=CLM,MDM",
     "test:contract:provider-only": "ts-node --transpile-only scripts/run-contract-ci.ts --provider-only",
+    "test:contract:provider-only:clm-mdm": "ts-node --transpile-only scripts/run-contract-ci.ts --provider-only --services=CLM,MDM",
     "test:swagger-coverage": "ts-node --transpile-only scripts/verify-swagger-coverage.ts",
     "test:swagger-coverage:ci": "ts-node --transpile-only scripts/verify-swagger-coverage.ts --fail-on-gap --write-doc",
     "send-report": "ts-node --transpile-only scripts/send-report.ts",
+    "report:refresh": "ts-node --transpile-only scripts/refresh-reports-from-json.ts",
     "report:open": "node -e \"console.log(require('path').resolve('reports/pact-report.html'))\""
   },
   "engines": {
-    "node": ">=18"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "devDependencies": {
     "@babel/core": "^8.0.9",
@@ -36,6 +40,7 @@
     "@types/nodemailer": "^6.4.24",
     "axios": "^1.8.4",
     "babel-jest": "^30.5.2",
+    "exceljs": "^4.4.0",
     "jest": "^30.0.0",
     "nodemailer": "^7.0.13",
     "ts-jest": "^29.3.1",

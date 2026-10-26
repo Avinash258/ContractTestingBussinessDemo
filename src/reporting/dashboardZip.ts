@@ -54,7 +54,7 @@ function zipDirectory(sourceDir: string, zipPath: string) {
  */
 export function packInteractiveDashboardZip(
   report: PactReport,
-  options: { outputZip?: string } = {}
+  options: { outputZip?: string; excelPath?: string } = {}
 ): string {
   const outputZip =
     options.outputZip ||
@@ -64,6 +64,9 @@ export function packInteractiveDashboardZip(
   const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'taxmesh-dashboard-'));
   const packageRoot = path.join(stagingRoot, 'TaxMesh-Dashboard');
   const safeReport = sanitizeReportForEmail(report);
+  const excelSource =
+    options.excelPath ||
+    path.join(process.cwd(), 'reports', 'TaxMesh-Contract-Report.xlsx');
 
   try {
     fs.mkdirSync(path.join(packageRoot, 'data'), { recursive: true });
@@ -90,6 +93,17 @@ export function packInteractiveDashboardZip(
       'utf8'
     );
 
+    if (excelSource && fs.existsSync(excelSource)) {
+      fs.copyFileSync(
+        excelSource,
+        path.join(packageRoot, 'data', 'TaxMesh-Contract-Report.xlsx')
+      );
+      fs.copyFileSync(
+        excelSource,
+        path.join(packageRoot, 'TaxMesh-Contract-Report.xlsx')
+      );
+    }
+
     fs.writeFileSync(
       path.join(packageRoot, 'README.txt'),
       `TaxMesh Contract Test Dashboard
@@ -98,8 +112,10 @@ export function packInteractiveDashboardZip(
 1. Unzip this folder.
 2. Open index.html in Chrome or Edge (double-click after unzip).
 3. Click microservice nodes on the map for endpoint details.
+4. Use Expand/Collapse, filters, Load more, and Download Excel in the toolbar.
 
 Optional: open service-map.html for the map-only view.
+Optional: open TaxMesh-Contract-Report.xlsx for the multi-sheet Excel report.
 
 Report data is embedded safely in index.html — no internet required.
 `,

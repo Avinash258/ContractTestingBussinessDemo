@@ -72,6 +72,14 @@ export async function sendReportEmail(options?: {
       contentType: 'application/octet-stream',
     });
   }
+  const excelPath = path.join(reportsDir, 'TaxMesh-Contract-Report.xlsx');
+  if (fs.existsSync(excelPath)) {
+    attachments.push({
+      filename: 'TaxMesh-Contract-Report.xlsx',
+      path: excelPath,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+  }
   // Default: compact TaxMesh body + dashboard zip; attach full HTML/JSON only if requested
   if (process.env.PACT_EMAIL_ATTACH_FULL_REPORT === 'true') {
     if (fs.existsSync(htmlPath)) {
@@ -122,6 +130,7 @@ export async function sendReportEmail(options?: {
     buildUrl ? `Pipeline: ${buildUrl}` : '',
     '',
     'Unzip TaxMesh-Contract-Dashboard.zip and open index.html for the interactive map.',
+    'Open TaxMesh-Contract-Report.xlsx for the multi-sheet Excel report.',
   ]
     .filter(Boolean)
     .join('\n');

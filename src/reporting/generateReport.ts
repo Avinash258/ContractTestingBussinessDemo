@@ -3,6 +3,9 @@ import path from 'path';
 import { buildTaxMeshServiceMap, buildServiceMapSvg } from './serviceMap';
 import { packInteractiveDashboardZip } from './dashboardZip';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
+import { enrichPhaseEndpoints } from './pactEndpointLookup';
+import { writeExcelReport } from './excelReport';
+import { config } from '../config';
 import type { InteractionResult, PactReport, PhaseStatus, PhaseSummary } from './types';
 
 const REPORTS_DIR = path.resolve(process.cwd(), 'reports');
@@ -74,7 +77,7 @@ export function summarizeConsumerFromJest(jestResults: any | null): PhaseSummary
         reason,
       });
       tests.push({
-        suite: suite.name,
+        suite: path.basename(String(suite.name || '')),
         name: test.title,
         endpoint,
         status: test.status,
@@ -265,6 +268,10 @@ function buildFailureBlocks(
 
 /** EY_Demo / ContractTestDemo light-theme HTML report. */
 export function renderHtmlReport(report: PactReport): string {
+  const consumerOpen = (report.consumer.failed || 0) > 0 ? ' open' : '';
+  const providerOpen = (report.provider.failed || 0) > 0 ? ' open' : '';
+  const env = report.environment || {};
+
   const consumerRows = (report.consumer.tests || report.consumer.interactions)
     .map((test: any) => {
       const name = test.name || test.description;
@@ -272,7 +279,7 @@ export function renderHtmlReport(report: PactReport): string {
       const status = test.status;
       const reason = status === 'failed' ? test.reason || '-' : '—';
       return `
-        <tr>
+        <tr data-status="${escapeHtml(status)}" data-text="${escapeHtml(`${test.endpoint || ''} ${name} ${suite}`.toLowerCase())}">
           <td>${escapeHtml(test.endpoint || '—')}</td>
           <td>${escapeHtml(name)}</td>
           <td>${escapeHtml(suite)}</td>
@@ -286,13 +293,13 @@ export function renderHtmlReport(report: PactReport): string {
   const providerRows = report.provider.interactions
     .map(
       (item) => `
-        <tr>
+        <tr data-status="${escapeHtml(item.status)}" data-text="${escapeHtml(`${item.endpoint || ''} ${item.description || ''}`.toLowerCase())}">
           <td>${escapeHtml(item.endpoint || '—')}</td>
           <td>${escapeHtml(item.description)}</td>
           <td>${statusBadge(item.status)}</td>
           <td>${escapeHtml(item.expected || '—')}</td>
           <td>${escapeHtml(item.actual || '—')}</td>
-          <td>${item.durationMs ?? '-'}ms</td>
+          <td>${item.durationMs ?? 0}ms</td>
         </tr>`
     )
     .join('');
@@ -319,6 +326,25 @@ export function renderHtmlReport(report: PactReport): string {
     .join('');
 
   const svg = buildServiceMapSvg(report.serviceMap as any, { light: false });
+  const buildMeta = [
+    env.BUILD_BUILDID ? `Build ${escapeHtml(env.BUILD_BUILDID)}` : '',
+    env.BUILD_SOURCEBRANCH ? escapeHtml(env.BUILD_SOURCEBRANCH.replace(/^refs\/heads\//, '')) : '',
+    env.BUILD_SOURCEVERSION ? `commit ${escapeHtml(String(env.BUILD_SOURCEVERSION).slice(0, 8))}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const tableControls = (prefix: string) => `
+    <div class="table-controls">
+      <input type="search" id="${prefix}Search" placeholder="Search…" />
+      <select id="${prefix}Filter">
+        <option value="all">All</option>
+        <option value="failed">Failed</option>
+        <option value="passed">Passed</option>
+      </select>
+      <span class="meta" id="${prefix}Count"></span>
+      <button type="button" class="linkish" data-load="${prefix}">Load more</button>
+    </div>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -349,7 +375,8 @@ export function renderHtmlReport(report: PactReport): string {
     .metric strong { display: block; font-size: 1.4rem; margin-bottom: 4px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     th, td { border-bottom: 1px solid var(--border); padding: 10px 8px; text-align: left; vertical-align: top; }
-    th { background: #f8fafc; }
+    th { background: #f8fafc; position: sticky; top: 0; z-index: 1; }
+    .table-scroll { overflow: auto; max-height: 520px; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
     .badge-passed { background: var(--passed); }
     .badge-failed { background: var(--failed); }
@@ -368,13 +395,32 @@ export function renderHtmlReport(report: PactReport): string {
     .phase-ran { margin-top: 8px; font-size: 0.9rem; color: var(--muted); }
     code { background: #eef2ff; padding: 2px 6px; border-radius: 6px; }
     .service-map-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; background: #0f172a; }
+    details.card { padding: 0; }
+    details.card > summary {
+      list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center; gap: 10px;
+      user-select: none; border-bottom: 1px solid transparent;
+    }
+    details.card[open] > summary { border-bottom-color: var(--border); }
+    details.card > summary::-webkit-details-marker { display: none; }
+    details.card > summary .chevron::before { content: '▶'; font-size: 0.75rem; color: var(--muted); }
+    details.card[open] > summary .chevron::before { content: '▼'; }
+    details.card > summary h2 { margin: 0; flex: 1; font-size: 1.1rem; }
+    details.card .body { padding: 0 20px 20px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+    .toolbar button, .table-controls button, .table-controls select, .table-controls input {
+      border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer;
+    }
+    .table-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+    .table-controls input { min-width: 180px; }
+    .linkish { color: #1d4ed8; }
+    tr[data-hidden="1"] { display: none; }
   </style>
 </head>
 <body>
   <div class="container">
     <section class="header">
       <h1>TaxMesh Pact Test Report</h1>
-      <p class="meta">Generated at ${escapeHtml(report.generatedAt)} · Pattern: ContractTestDemo / EY_Demo</p>
+      <p class="meta">Generated at ${escapeHtml(report.generatedAt)} · Pattern: ContractTestDemo / EY_Demo${buildMeta ? ` · ${buildMeta}` : ''}</p>
       <p>
         Overall status:
         <strong class="overall-${report.overallStatus === 'passed' ? 'passed' : 'failed'}">
@@ -387,62 +433,127 @@ export function renderHtmlReport(report: PactReport): string {
         <div class="metric"><strong>${escapeHtml(String(report.pactFiles.length))}</strong>Pact file(s) generated</div>
         <div class="metric"><strong>${escapeHtml(report.environment.GATEWAY_BASE_URL || report.provider.providerBaseUrl || 'n/a')}</strong>Verification URL</div>
       </div>
+      <div class="toolbar">
+        <button type="button" id="expandAllBtn">Expand all</button>
+        <button type="button" id="collapseAllBtn">Collapse all</button>
+      </div>
     </section>
 
     ${buildPhaseCards(report)}
 
-    <section class="card service-map-card">
-      <h2>Microservice map</h2>
-      <p class="meta">Live contract-test status across TaxMesh services (CLM → DOC + Gateway). Green = OK, red = failure.</p>
-      <div class="service-map-wrap">${svg}</div>
-    </section>
+    <details class="card service-map-card" open>
+      <summary><span class="chevron"></span><h2>Microservice map</h2></summary>
+      <div class="body">
+        <p class="meta">Live contract-test status across TaxMesh services (CLM → DOC + Gateway). Green = OK, red = failure.</p>
+        <div class="service-map-wrap">${svg}</div>
+      </div>
+    </details>
 
     ${
       highlightRows
-        ? `<section class="card">
-      <h2>Failure highlights</h2>
+        ? `<details class="card" open>
+      <summary><span class="chevron"></span><h2>Failure highlights</h2>${statusBadge('failed')}</summary>
+      <div class="body">
       <p class="meta">Endpoint, expected, and actual values for failed tests.</p>
       <table>
         <thead><tr><th>Phase</th><th>Endpoint</th><th>Test / interaction</th><th>Expected</th><th>Actual</th></tr></thead>
         <tbody>${highlightRows}</tbody>
       </table>
-    </section>`
+      </div>
+    </details>`
         : ''
     }
 
-    <section class="card">
-      <h2>Consumer Contract Tests</h2>
+    <details class="card"${consumerOpen}>
+      <summary><span class="chevron"></span><h2>Consumer Contract Tests</h2>${statusBadge(report.consumer.status)} <span class="meta">${report.consumer.passed}/${report.consumer.total}</span></summary>
+      <div class="body">
       <p class="meta">Step 1 — ${escapeHtml(report.consumer.label)}</p>
-      ${statusBadge(report.consumer.status)}
-      <table>
+      ${tableControls('consumer')}
+      <div class="table-scroll">
+      <table id="consumerTable">
         <thead><tr><th>Endpoint</th><th>Test</th><th>Suite</th><th>Status</th><th>Reason</th><th>Duration</th></tr></thead>
         <tbody>${consumerRows || '<tr><td colspan="6">No consumer test results available.</td></tr>'}</tbody>
       </table>
+      </div>
       ${buildFailureBlocks(report.consumer.failures, 'Consumer failure details')}
-    </section>
+      </div>
+    </details>
 
-    <section class="card">
-      <h2>Provider Verification</h2>
+    <details class="card"${providerOpen}>
+      <summary><span class="chevron"></span><h2>Provider Verification</h2>${statusBadge(report.provider.status)} <span class="meta">${report.provider.passed}/${report.provider.total}</span></summary>
+      <div class="body">
       <p class="meta">Step 2 — ${escapeHtml(report.provider.label)}</p>
-      ${statusBadge(report.provider.status)}
-      <table>
+      ${tableControls('provider')}
+      <div class="table-scroll">
+      <table id="providerTable">
         <thead><tr><th>Endpoint</th><th>Interaction</th><th>Status</th><th>Expected</th><th>Actual</th><th>Duration</th></tr></thead>
         <tbody>${providerTableBody}</tbody>
       </table>
+      </div>
       ${buildFailureBlocks(report.provider.failures, 'Provider failure details')}
-    </section>
+      </div>
+    </details>
 
-    <section class="card">
-      <h2>Artifacts</h2>
+    <details class="card">
+      <summary><span class="chevron"></span><h2>Artifacts</h2></summary>
+      <div class="body">
       <ul>
         <li>JSON report: <code>reports/pact-report.json</code></li>
         <li>HTML report: <code>reports/pact-report.html</code></li>
+        <li>Excel report: <code>reports/TaxMesh-Contract-Report.xlsx</code></li>
         <li>Interactive map: <code>reports/interactive-service-map.html</code></li>
         <li>Dashboard zip: <code>reports/TaxMesh-Contract-Dashboard.zip</code></li>
         <li>Pact files: ${report.pactFiles.map((f) => `<code>${escapeHtml(f)}</code>`).join(', ') || 'None'}</li>
       </ul>
-    </section>
+      </div>
+    </details>
   </div>
+  <script>
+    (function () {
+      const PAGE = 50;
+      const state = { consumer: PAGE, provider: PAGE };
+      function apply(prefix) {
+        const table = document.getElementById(prefix + 'Table');
+        if (!table) return;
+        const rows = Array.from(table.tBodies[0]?.rows || []);
+        const filter = document.getElementById(prefix + 'Filter')?.value || 'all';
+        const q = (document.getElementById(prefix + 'Search')?.value || '').toLowerCase().trim();
+        let matched = 0;
+        let shown = 0;
+        for (const row of rows) {
+          const status = row.getAttribute('data-status') || '';
+          const text = row.getAttribute('data-text') || '';
+          const okStatus = filter === 'all' || status === filter;
+          const okSearch = !q || text.includes(q);
+          const match = okStatus && okSearch;
+          if (match) matched += 1;
+          const visible = match && matched <= state[prefix];
+          if (visible) shown += 1;
+          row.setAttribute('data-hidden', visible ? '0' : '1');
+        }
+        const count = document.getElementById(prefix + 'Count');
+        if (count) count.textContent = 'Showing ' + shown + ' of ' + matched;
+      }
+      ['consumer', 'provider'].forEach((prefix) => {
+        document.getElementById(prefix + 'Search')?.addEventListener('input', () => { state[prefix] = PAGE; apply(prefix); });
+        document.getElementById(prefix + 'Filter')?.addEventListener('change', () => { state[prefix] = PAGE; apply(prefix); });
+        apply(prefix);
+      });
+      document.querySelectorAll('[data-load]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const prefix = btn.getAttribute('data-load');
+          state[prefix] += PAGE;
+          apply(prefix);
+        });
+      });
+      document.getElementById('expandAllBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('details.card').forEach((d) => { d.open = true; });
+      });
+      document.getElementById('collapseAllBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('details.card').forEach((d) => { d.open = false; });
+      });
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -468,50 +579,55 @@ export function buildReport(input: {
           ? 'passed'
           : 'unknown';
 
-  const serviceMap = buildTaxMeshServiceMap(input.consumer, input.provider);
+  const pactsDir = config.pactsDir;
+  const consumer = enrichPhaseEndpoints(input.consumer, pactsDir);
+  const provider = enrichPhaseEndpoints(input.provider, pactsDir);
+  const serviceMap = buildTaxMeshServiceMap(consumer, provider);
 
   return {
     generatedAt: new Date().toISOString(),
     project: 'TaxMesh Pact Contract Tests',
     overallStatus,
-    consumer: input.consumer,
-    provider: input.provider,
+    consumer,
+    provider,
     pactFiles: input.pactFiles,
     serviceMap,
     phases: {
       consumer: {
-        ran: input.consumer.ran,
-        status: input.consumer.status,
-        passed: input.consumer.passed,
-        total: input.consumer.total,
-        failed: input.consumer.failed,
-        label: input.consumer.label,
+        ran: consumer.ran,
+        status: consumer.status,
+        passed: consumer.passed,
+        total: consumer.total,
+        failed: consumer.failed,
+        label: consumer.label,
       },
       provider: {
-        ran: input.provider.ran,
-        status: input.provider.status,
-        passed: input.provider.passed,
-        total: input.provider.total,
-        failed: input.provider.failed,
-        label: input.provider.label,
-        providerBaseUrl: input.provider.providerBaseUrl,
+        ran: provider.ran,
+        status: provider.status,
+        passed: provider.passed,
+        total: provider.total,
+        failed: provider.failed,
+        label: provider.label,
+        providerBaseUrl: provider.providerBaseUrl,
       },
     },
     environment: input.environment || {},
   };
 }
 
-export function writeReports(report: PactReport): {
+export async function writeReports(report: PactReport): Promise<{
   jsonPath: string;
   htmlPath: string;
   interactivePath: string;
   dashboardZipPath: string;
-} {
+  excelPath: string;
+}> {
   const dir = ensureReportsDir();
   const jsonPath = path.join(dir, 'pact-report.json');
   const latestPath = path.join(dir, 'latest.json');
   const htmlPath = path.join(dir, 'pact-report.html');
   const interactivePath = path.join(dir, 'interactive-service-map.html');
+  const excelPathDefault = path.join(dir, 'TaxMesh-Contract-Report.xlsx');
 
   const html = renderHtmlReport(report);
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf8');
@@ -534,13 +650,39 @@ export function writeReports(report: PactReport): {
     'utf8'
   );
 
+  let excelPath = '';
+  try {
+    excelPath = await writeExcelReport(report, excelPathDefault);
+  } catch (error: any) {
+    const fallback = path.join(
+      dir,
+      `TaxMesh-Contract-Report-${Date.now()}.xlsx`
+    );
+    try {
+      excelPath = await writeExcelReport(report, fallback);
+      console.warn(
+        `Excel primary path locked (${error.message}); wrote fallback: ${fallback}`
+      );
+    } catch (fallbackError: any) {
+      console.warn(`Failed to write Excel report: ${fallbackError.message}`);
+    }
+  }
+  if (excelPath) {
+    try {
+      fs.copyFileSync(excelPath, path.join(dashboardDataDir, 'TaxMesh-Contract-Report.xlsx'));
+    } catch (copyError: any) {
+      console.warn(`Could not copy Excel into dashboard/data: ${copyError.message}`);
+    }
+    console.log(`Excel report: ${excelPath}`);
+  }
+
   let dashboardZipPath = '';
   try {
-    dashboardZipPath = packInteractiveDashboardZip(report);
+    dashboardZipPath = packInteractiveDashboardZip(report, { excelPath: excelPath || undefined });
     console.log(`Interactive dashboard zip: ${dashboardZipPath}`);
   } catch (error: any) {
     console.warn(`Failed to package interactive dashboard zip: ${error.message}`);
   }
 
-  return { jsonPath, htmlPath, interactivePath, dashboardZipPath };
+  return { jsonPath, htmlPath, interactivePath, dashboardZipPath, excelPath };
 }
