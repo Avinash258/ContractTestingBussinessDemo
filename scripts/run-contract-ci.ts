@@ -200,13 +200,16 @@ async function main() {
     },
   });
 
-  const { jsonPath, htmlPath } = writeReports(report);
-  console.log('\n=== Pact report ===');
+  const { jsonPath, htmlPath, interactivePath, dashboardZipPath } = writeReports(report);
+  console.log('\n=== Pact report (ContractTestDemo / EY_Demo style) ===');
   console.log(`  Overall : ${report.overallStatus.toUpperCase()}`);
   console.log(`  Consumer: ${report.consumer.passed}/${report.consumer.total}`);
   console.log(`  Provider: ${report.provider.passed}/${report.provider.total}`);
   console.log(`  JSON    : ${jsonPath}`);
   console.log(`  HTML    : ${htmlPath}`);
+  console.log(`  Map     : ${interactivePath}`);
+  if (dashboardZipPath) console.log(`  Zip     : ${dashboardZipPath}`);
+  console.log(`  Dashboard data: dashboard/data/latest.json`);
 
   const exitCode = consumerOnly
     ? consumerExit

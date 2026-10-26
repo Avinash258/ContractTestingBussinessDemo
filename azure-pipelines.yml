@@ -157,3 +157,7 @@ stages:
           - publish: $(System.DefaultWorkingDirectory)/reports
             artifact: pact-provider-report
             condition: succeededOrFailed()
+
+          - publish: $(System.DefaultWorkingDirectory)/dashboard
+            artifact: pact-dashboard
+            condition: succeededOrFailed()
