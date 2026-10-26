@@ -3,176 +3,13 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import type { PactReport } from './types';
 import { packInteractiveDashboardZip } from './dashboardZip';
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function statusColor(status: string): string {
-  if (status === 'passed') return '#15803d';
-  if (status === 'failed') return '#b91c1c';
-  return '#a16207';
-}
-
-function phaseBadge(status: string): string {
-  const color = statusColor(status);
-  return `<span style="color:${color};font-weight:700">${escapeHtml(String(status || 'unknown').toUpperCase())}</span>`;
-}
-
-/** Compact EY_Demo-style email body (Outlook/Gmail safe, no JS). */
-export function buildEmailHtml(report: PactReport, buildUrl?: string): string {
-  const consumer = report.consumer;
-  const provider = report.provider;
-  const overallStatus = report.overallStatus;
-  const statusColorValue = statusColor(overallStatus);
-  const tableStyle =
-    'border-collapse:collapse;font-family:Segoe UI,sans-serif;font-size:14px;width:100%;max-width:720px';
-  const cell = 'border:1px solid #dbe3ef;padding:8px 10px;text-align:left;vertical-align:top';
-  const header = `${cell};background:#f8fafc;font-weight:600`;
-
-  const serviceRows = (report.serviceMap?.nodes || [])
-    .filter((n) => n.layer === 'service' || n.layer === 'gateway')
-    .map((node) => {
-      const color = statusColor(node.status);
-      return `<tr>
-        <td style="${cell}">${escapeHtml(node.label)}</td>
-        <td style="${cell}"><span style="color:${color};font-weight:700">${escapeHtml(node.status.toUpperCase())}</span></td>
-        <td style="${cell}">${node.passed}/${node.total}</td>
-        <td style="${cell}">${node.failed}</td>
-      </tr>`;
-    })
-    .join('');
-
-  const failRows = [
-    ...(consumer.failures || []).map((f) => ({
-      phase: 'Consumer',
-      endpoint: f.endpoint || '—',
-      name: f.test || '—',
-      detail: f.reason || '—',
-    })),
-    ...(provider.interactions || [])
-      .filter((i) => i.status === 'failed')
-      .map((i) => ({
-        phase: 'Provider',
-        endpoint: i.endpoint || '—',
-        name: i.description,
-        detail: i.reason || i.actual || '—',
-      })),
-  ]
-    .slice(0, 5)
-    .map(
-      (r) =>
-        `<tr><td style="${cell}">${escapeHtml(r.phase)}</td><td style="${cell}">${escapeHtml(r.endpoint)}</td><td style="${cell}">${escapeHtml(r.name)}</td><td style="${cell}">${escapeHtml(r.detail)}</td></tr>`
-    )
-    .join('');
-
-  const summary = report.serviceMap?.summary;
-
-  return `<div style="font-family:Segoe UI,sans-serif;font-size:14px;color:#1f2937">
-  <p style="margin:0 0 4px;font-size:16px;font-weight:700">TaxMesh Pact Contract Test Report</p>
-  <p style="margin:0 0 16px;color:#6b7280">Generated: ${escapeHtml(report.generatedAt)}</p>
-
-  <div style="margin:16px 0 20px;padding:16px;border:1px solid #dbe3ef;border-radius:10px;background:#fafcff">
-    <p style="margin:0 0 12px;font-size:18px;font-weight:700">
-      Overall result: <span style="color:${statusColorValue}">${escapeHtml(overallStatus.toUpperCase())}</span>
-    </p>
-    <table border="1" cellpadding="0" cellspacing="0" style="${tableStyle}">
-      <thead>
-        <tr>
-          <th style="${header}">Phase</th>
-          <th style="${header}">Passed</th>
-          <th style="${header}">Failed</th>
-          <th style="${header}">Total</th>
-          <th style="${header}">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="${cell}"><strong>Consumer</strong></td>
-          <td style="${cell}">${consumer.passed}</td>
-          <td style="${cell}">${consumer.failed}</td>
-          <td style="${cell}">${consumer.total}</td>
-          <td style="${cell}">${phaseBadge(consumer.status)}</td>
-        </tr>
-        <tr>
-          <td style="${cell}"><strong>Provider</strong></td>
-          <td style="${cell}">${provider.passed}</td>
-          <td style="${cell}">${provider.failed}</td>
-          <td style="${cell}">${provider.total}</td>
-          <td style="${cell}">${phaseBadge(provider.status)}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="margin:12px 0 0;color:#6b7280;font-size:13px">
-      Pact files: <code>${escapeHtml((report.pactFiles || []).join(', ') || 'none')}</code>
-      &nbsp;|&nbsp; Verification URL:
-      <code>${escapeHtml(provider.providerBaseUrl || report.environment.GATEWAY_BASE_URL || 'n/a')}</code>
-    </p>
-  </div>
-
-  <p style="font-weight:700;margin:0 0 8px">Pipeline phases</p>
-  <table border="1" cellpadding="0" cellspacing="0" style="${tableStyle}">
-    <thead>
-      <tr>
-        <th style="${header}">Phase</th><th style="${header}">Ran</th><th style="${header}">Status</th>
-        <th style="${header}">Passed</th><th style="${header}">Failed</th><th style="${header}">Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td style="${cell}"><strong>1. Consumer</strong></td>
-        <td style="${cell}">${consumer.ran ? 'Yes' : 'No'}</td>
-        <td style="${cell}">${phaseBadge(consumer.status)}</td>
-        <td style="${cell}">${consumer.passed}</td>
-        <td style="${cell}">${consumer.failed}</td>
-        <td style="${cell}">${consumer.total}</td>
-      </tr>
-      <tr>
-        <td style="${cell}"><strong>2. Provider</strong></td>
-        <td style="${cell}">${provider.ran ? 'Yes' : 'No'}</td>
-        <td style="${cell}">${phaseBadge(provider.status)}</td>
-        <td style="${cell}">${provider.passed}</td>
-        <td style="${cell}">${provider.failed}</td>
-        <td style="${cell}">${provider.total}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  ${
-    serviceRows
-      ? `<p style="font-weight:700;margin:20px 0 8px">Microservice health</p>
-     <p style="margin:0 0 8px;color:#6b7280;font-size:13px">Healthy ${summary?.healthy || 0} · Failed ${summary?.failed || 0} · Untested ${summary?.unknown || 0}. Open the attached dashboard zip for the interactive map.</p>
-     <table border="1" cellpadding="0" cellspacing="0" style="${tableStyle}">
-       <thead><tr><th style="${header}">Service</th><th style="${header}">Status</th><th style="${header}">Passed/Total</th><th style="${header}">Failed</th></tr></thead>
-       <tbody>${serviceRows}</tbody>
-     </table>`
-      : ''
-  }
-
-  ${
-    failRows
-      ? `<p style="font-weight:700;margin:20px 0 8px">Failure highlights</p>
-       <table border="1" cellpadding="0" cellspacing="0" style="${tableStyle}">
-         <thead><tr><th style="${header}">Phase</th><th style="${header}">Endpoint</th><th style="${header}">Test</th><th style="${header}">Detail</th></tr></thead>
-         <tbody>${failRows}</tbody>
-       </table>`
-      : ''
-  }
-
-  ${buildUrl ? `<p style="margin:16px 0 0"><a href="${escapeHtml(buildUrl)}">View pipeline run</a></p>` : ''}
-  <p style="margin:16px 0 0;color:#6b7280">Interactive dashboard attached as <code>TaxMesh-Contract-Dashboard.zip</code> (unzip → open index.html). Full <code>pact-report.html</code> / JSON also attached when available.</p>
-</div>`;
-}
+import { buildEmailDashboardBody } from './emailDashboard';
 
 export async function sendReportEmail(options?: {
   reportPath?: string;
   htmlPath?: string;
   force?: boolean;
-}): Promise<{ sent: boolean; reason?: string; to?: string }> {
+}): Promise<{ sent: boolean; reason?: string; to?: string; messageId?: string }> {
   const reportsDir = path.resolve(process.cwd(), 'reports');
   const reportPath =
     options?.reportPath ||
@@ -231,35 +68,62 @@ export async function sendReportEmail(options?: {
       contentType: 'application/octet-stream',
     });
   }
-  if (fs.existsSync(htmlPath)) {
-    attachments.push({ filename: 'pact-report.html', path: htmlPath, contentType: 'text/html' });
-  }
-  if (fs.existsSync(reportPath)) {
-    attachments.push({
-      filename: 'pact-report.json',
-      path: reportPath,
-      contentType: 'application/json',
-    });
+  // FinVault default: compact body + zip; attach full HTML/JSON only if requested
+  if (process.env.PACT_EMAIL_ATTACH_FULL_REPORT === 'true') {
+    if (fs.existsSync(htmlPath)) {
+      attachments.push({ filename: 'pact-report.html', path: htmlPath, contentType: 'text/html' });
+    }
+    if (fs.existsSync(reportPath)) {
+      attachments.push({
+        filename: 'pact-report.json',
+        path: reportPath,
+        contentType: 'application/json',
+      });
+    }
   }
 
+  const buildId = process.env.BUILD_BUILDID;
+  const collectionUri =
+    process.env.SYSTEM_COLLECTIONURI || process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI || '';
+  const teamProject = process.env.SYSTEM_TEAMPROJECT || '';
   const buildUrl =
     process.env.BUILD_URL ||
-    (process.env.SYSTEM_COLLECTIONURI && process.env.BUILD_BUILDID
-      ? `${process.env.SYSTEM_COLLECTIONURI}${process.env.SYSTEM_TEAMPROJECT}/_build/results?buildId=${process.env.BUILD_BUILDID}`
+    process.env.BUILD_BUILDURI ||
+    (collectionUri && buildId
+      ? `${collectionUri.replace(/\/$/, '')}/${teamProject}/_build/results?buildId=${buildId}`
       : undefined);
 
+  const htmlBody = buildEmailDashboardBody(report, {
+    buildId,
+    buildUrl: buildUrl && String(buildUrl).startsWith('http') ? buildUrl : '',
+    collectionUri,
+    teamProject,
+    compact: true,
+  });
+
   const status = (report.overallStatus || 'unknown').toUpperCase();
-  const subject = `TaxMesh Pact Contract Test Report — ${status}`;
+  const subject = `TaxMesh Contract Test Report — ${status}`;
+  const target =
+    report.provider.providerBaseUrl ||
+    report.environment.GATEWAY_BASE_URL ||
+    'n/a';
   const text = [
-    `TaxMesh Pact Contract Test Report — ${status}`,
-    `Generated: ${report.generatedAt}`,
-    `Consumer: ${consumerLine(report)}`,
-    `Provider: ${providerLine(report)}`,
+    `TaxMesh Contract Test Report — ${status}`,
+    `Target ${target}`,
+    `Generated ${report.generatedAt}`,
+    '',
+    `Consumer ${report.consumer.passed}/${report.consumer.total} ${report.consumer.status}`,
+    `Provider ${report.provider.passed}/${report.provider.total} ${report.provider.status}`,
+    `Overall ${(report.consumer.passed || 0) + (report.provider.passed || 0)}/${(report.consumer.total || 0) + (report.provider.total || 0)}`,
     buildUrl ? `Pipeline: ${buildUrl}` : '',
+    '',
     'Unzip TaxMesh-Contract-Dashboard.zip and open index.html for the interactive map.',
   ]
     .filter(Boolean)
     .join('\n');
+
+  console.log(`SMTP host: ${host}:${port}`);
+  console.log(`Report recipients: ${to}`);
 
   try {
     await transporter.verify();
@@ -274,23 +138,37 @@ export async function sendReportEmail(options?: {
       to,
       subject,
       text,
-      html: buildEmailHtml(report, buildUrl),
+      html: htmlBody,
       attachments,
     });
     console.log(
       `Report email sent to ${to} with ${attachments.length} attachment(s) (messageId: ${info.messageId})`
     );
+    console.log('Email uses FinVault-style compact dashboard body + TaxMesh-Contract-Dashboard.zip.');
     fs.writeFileSync(emailSentMarker, new Date().toISOString(), 'utf8');
-    return { sent: true, to };
+    return { sent: true, to, messageId: info.messageId };
   } catch (error: any) {
+    // Gmail 552 retry: text + zip only (FinVault pattern)
+    const blocked =
+      String(error.message || '').includes('552') ||
+      String(error.message || '').includes('BlockedMessage');
+    if (blocked && attachments.length > 0) {
+      try {
+        const retry = await transporter.sendMail({
+          from: `"TaxMesh Pact" <${from}>`,
+          to,
+          subject,
+          text,
+          attachments: attachments.filter((a) => a.filename.endsWith('.zip')),
+        });
+        console.log(`Report email sent on retry (text + zip): ${retry.messageId}`);
+        fs.writeFileSync(emailSentMarker, new Date().toISOString(), 'utf8');
+        return { sent: true, to, messageId: retry.messageId };
+      } catch (retryErr: any) {
+        console.warn(`Retry also failed: ${retryErr.message}`);
+      }
+    }
     console.warn(`Failed to send report email: ${error.message}`);
     return { sent: false, reason: 'send-failed' };
   }
-}
-
-function consumerLine(report: PactReport) {
-  return `${report.consumer.status} ${report.consumer.passed}/${report.consumer.total}`;
-}
-function providerLine(report: PactReport) {
-  return `${report.provider.status} ${report.provider.passed}/${report.provider.total}`;
 }
