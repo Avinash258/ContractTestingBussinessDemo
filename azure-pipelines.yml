@@ -67,6 +67,23 @@ stages:
         displayName: 'Consumer — generate pact files (${{ parameters.services }})'
         steps:
           - checkout: self
+            fetchDepth: 0
+            clean: true
+
+          # Manual "Run pipeline" often sticks a stale Commit SHA — move to branch tip.
+          # Skip on PRs so we keep the PR merge commit.
+          - script: |
+              set -euo pipefail
+              BRANCH="$(echo "$(Build.SourceBranch)" | sed 's#refs/heads/##')"
+              if [ -z "${BRANCH}" ] || [ "${BRANCH}" = "$(Build.SourceBranch)" ]; then
+                BRANCH="main"
+              fi
+              echo "Syncing workspace to latest origin/${BRANCH} (was $(git rev-parse --short HEAD))"
+              git fetch origin "${BRANCH}"
+              git checkout -B "${BRANCH}" "origin/${BRANCH}"
+              echo "HEAD is now $(git rev-parse HEAD) — $(git log -1 --oneline)"
+            displayName: 'Use latest commit on branch'
+            condition: ne(variables['Build.Reason'], 'PullRequest')
 
           - task: NodeTool@0
             displayName: 'Install Node.js'
@@ -119,6 +136,21 @@ stages:
         condition: succeeded()
         steps:
           - checkout: self
+            fetchDepth: 0
+            clean: true
+
+          - script: |
+              set -euo pipefail
+              BRANCH="$(echo "$(Build.SourceBranch)" | sed 's#refs/heads/##')"
+              if [ -z "${BRANCH}" ] || [ "${BRANCH}" = "$(Build.SourceBranch)" ]; then
+                BRANCH="main"
+              fi
+              echo "Syncing workspace to latest origin/${BRANCH} (was $(git rev-parse --short HEAD))"
+              git fetch origin "${BRANCH}"
+              git checkout -B "${BRANCH}" "origin/${BRANCH}"
+              echo "HEAD is now $(git rev-parse HEAD) — $(git log -1 --oneline)"
+            displayName: 'Use latest commit on branch'
+            condition: ne(variables['Build.Reason'], 'PullRequest')
 
           - task: NodeTool@0
             displayName: 'Install Node.js'
