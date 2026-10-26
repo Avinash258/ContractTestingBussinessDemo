@@ -467,6 +467,8 @@
 
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: var(--surface-2); }
+    tr.fail-row td { background: #fef2f2; }
+    [data-theme="dark"] tr.fail-row td { background: rgba(153, 27, 27, 0.25); }
 
     @media print {
       .toolbar, #themeToggle, .copy-btn, .toast, button, .file-btn { display: none !important; }
@@ -1568,7 +1570,20 @@
       const coverage = (report.coverage?.rows || []).map((r) => [
         r.method || '', r.path || '', r.status || '', r.notes || r.note || '', r.operation || r.operationId || '',
       ]);
-      const pactRows = getPactFileRows().map((r) => [r.file, r.consumer, r.provider, r.interactions]);
+      const interactions = provider.interactions || [];
+      const pactRows = (report.pactFiles || []).map((file) => {
+        const matching = interactions.filter((ix) => ix.pactFile === file);
+        const consumerName =
+          matching[0]?.consumer ||
+          String(file).replace(/\.json$/i, '').split('-TaxMesh-')[0] ||
+          '';
+        const providerName =
+          matching[0]?.provider ||
+          (String(file).includes('-TaxMesh-')
+            ? `TaxMesh-${String(file).split('-TaxMesh-').pop()?.replace(/\.json$/i, '')}`
+            : '');
+        return [file, consumerName, providerName, matching.length];
+      });
       const failureRows = [];
       for (const f of consumer.failures || []) {
         failureRows.push(['Consumer', f.endpoint || '', f.test || '', 'Pass', f.reason || '', '', '', 'Check consumer expectation']);
@@ -2029,6 +2044,7 @@ ${sheets.join('\n')}
         renderReport(window.__PACT_REPORT__);
         return;
       }
+      lastTriedPaths = ['data/latest.json', 'data/report.json', 'data/latest.js'];
       for (const reportPath of ['data/latest.json', 'data/report.json']) {
         try {
           const report = await fetchReportJson(reportPath);
@@ -2040,10 +2056,35 @@ ${sheets.join('\n')}
           // try next
         }
       }
+      const hint = document.getElementById('emptyHint');
+      if (hint) {
+        hint.innerHTML = 'Could not load report. Tried: <code>' + lastTriedPaths.map(escapeHtml).join('</code>, <code>') + '</code>. Run <code>npm run test:contract</code> or use <strong>Load JSON</strong>.';
+      }
       emptyState.classList.remove('hidden');
       dashboard.classList.add('hidden');
     }
 
+    function wireSort(tableId, stateKey, rerender) {
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      table.querySelectorAll('th.sortable').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.getAttribute('data-sort');
+          const cur = sortState[stateKey];
+          if (cur.key === key) cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+          else { cur.key = key; cur.dir = key === 'durationMs' || key === 'interactions' ? 'desc' : 'asc'; }
+          table.querySelectorAll('th.sortable').forEach((h) => h.classList.remove('asc', 'desc'));
+          th.classList.add(cur.dir);
+          rerender();
+        });
+      });
+    }
+
+    initTheme();
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+    });
     document.getElementById('refreshBtn').addEventListener('click', loadLatest);
     document.getElementById('excelBtn').addEventListener('click', downloadExcel);
     document.getElementById('expandAllBtn').addEventListener('click', () => {
@@ -2052,18 +2093,90 @@ ${sheets.join('\n')}
     document.getElementById('collapseAllBtn').addEventListener('click', () => {
       document.querySelectorAll('#dashboard details.card').forEach((d) => { d.open = false; });
     });
+    document.querySelectorAll('details.card > summary').forEach((summary) => {
+      const details = summary.parentElement;
+      const sync = () => summary.setAttribute('aria-expanded', details.open ? 'true' : 'false');
+      sync();
+      details.addEventListener('toggle', sync);
+    });
     document.getElementById('consumerSearch').addEventListener('input', () => { consumerLimit = PAGE_SIZE; renderConsumerTable(); });
     document.getElementById('consumerFilter').addEventListener('change', () => { consumerLimit = PAGE_SIZE; renderConsumerTable(); });
     document.getElementById('providerSearch').addEventListener('input', () => { providerLimit = PAGE_SIZE; renderProviderTable(); });
     document.getElementById('providerFilter').addEventListener('change', () => { providerLimit = PAGE_SIZE; renderProviderTable(); });
     document.getElementById('consumerLoadMore').addEventListener('click', () => { consumerLimit += PAGE_SIZE; renderConsumerTable(); });
     document.getElementById('providerLoadMore').addEventListener('click', () => { providerLimit += PAGE_SIZE; renderProviderTable(); });
-    document.getElementById('fileInput').addEventListener('change', async (event) => {
+    document.getElementById('coverageSearch').addEventListener('input', () => { coverageLimit = PAGE_SIZE; renderCoverageTable(); });
+    document.getElementById('coverageFilter').addEventListener('change', () => { coverageLimit = PAGE_SIZE; renderCoverageTable(); });
+    document.getElementById('coverageMethodFilter').addEventListener('change', () => { coverageLimit = PAGE_SIZE; renderCoverageTable(); });
+    document.getElementById('coverageLoadMore').addEventListener('click', () => { coverageLimit += PAGE_SIZE; renderCoverageTable(); });
+    document.getElementById('consumerCsvBtn').addEventListener('click', () => {
+      const rows = filterRows(getConsumerRows(), document.getElementById('consumerFilter').value, document.getElementById('consumerSearch').value);
+      exportCsv('consumer-tests.csv', ['Endpoint', 'Test', 'Suite', 'Status', 'Reason', 'DurationMs'], rows.map((r) => [r.endpoint, r.name, r.suite, r.status, r.reason, r.durationMs]));
+    });
+    document.getElementById('providerCsvBtn').addEventListener('click', () => {
+      let rows = filterRows(getProviderRows(), document.getElementById('providerFilter').value, document.getElementById('providerSearch').value);
+      if (providerPactFilter) rows = rows.filter((r) => r.pactFile === providerPactFilter);
+      exportCsv('provider-interactions.csv', ['Endpoint', 'Interaction', 'Status', 'Expected', 'Actual', 'DurationMs', 'PactFile'], rows.map((r) => [r.endpoint, r.description, r.status, r.expected, r.actual, r.durationMs, r.pactFile]));
+    });
+    document.getElementById('coverageCsvBtn').addEventListener('click', () => {
+      let rows = filterRows(getCoverageRows(), document.getElementById('coverageFilter').value, document.getElementById('coverageSearch').value, (r) => (r.notes + ' ' + r.operation));
+      const method = document.getElementById('coverageMethodFilter').value;
+      if (method !== 'all') rows = rows.filter((r) => r.method === method);
+      exportCsv('api-coverage.csv', ['Method', 'Path', 'Status', 'Operation', 'Notes'], rows.map((r) => [r.method, r.path, r.status, r.operation, r.notes]));
+    });
+    document.getElementById('pactCsvBtn').addEventListener('click', () => {
+      const rows = getPactFileRows();
+      exportCsv('pact-files.csv', ['File', 'Consumer', 'Provider', 'Interactions'], rows.map((r) => [r.file, r.consumer, r.provider, r.interactions]));
+    });
+    document.getElementById('slowCsvBtn').addEventListener('click', () => {
+      const consumer = currentReport?.consumer || {};
+      const provider = currentReport?.provider || {};
+      const rows = [
+        ...[...(consumer.tests || [])].sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0)).slice(0, 10).map((t) => ['Consumer', t.endpoint, t.name, t.durationMs, t.status]),
+        ...[...(provider.interactions || [])].sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0)).slice(0, 10).map((t) => ['Provider', t.endpoint, t.description, t.durationMs, t.status]),
+      ];
+      exportCsv('top-slow.csv', ['Phase', 'Endpoint', 'Name', 'DurationMs', 'Status'], rows);
+    });
+    document.getElementById('pactFilesTable').addEventListener('click', (event) => {
+      const tr = event.target.closest('tr[data-pact]');
+      if (!tr) return;
+      providerPactFilter = tr.getAttribute('data-pact') || '';
+      providerLimit = PAGE_SIZE;
+      setSectionOpen('providerSection', true);
+      renderProviderTable();
+      showToast('Filtered provider table to ' + providerPactFilter);
+    });
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-copy]');
+      if (btn) copyText(btn.getAttribute('data-copy'));
+    });
+    wireSort('consumerTableEl', 'consumer', () => { consumerLimit = PAGE_SIZE; renderConsumerTable(); });
+    wireSort('providerTableEl', 'provider', () => { providerLimit = PAGE_SIZE; renderProviderTable(); });
+    wireSort('coverageTableEl', 'coverage', () => { coverageLimit = PAGE_SIZE; renderCoverageTable(); });
+    wireSort('pactFilesTableEl', 'pact', () => {
+      if (!currentReport) return;
+      const pactRows = sortRows(getPactFileRows(), sortState.pact.key, sortState.pact.dir);
+      document.getElementById('pactFilesTable').innerHTML = pactRows.map((row) => `
+        <tr class="clickable-row" data-pact="${escapeHtml(row.file)}">
+          <td><code>${escapeHtml(row.file)}</code></td>
+          <td>${svcChip(row.consumer)}</td>
+          <td>${svcChip(row.provider)}</td>
+          <td>${row.interactions}</td>
+        </tr>
+      `).join('');
+    });
+    wireSort('slowTableEl', 'slow', () => {
+      if (!currentReport) return;
+      renderReport(currentReport);
+    });
+    const onFile = async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
       const text = await file.text();
       renderReport(JSON.parse(text));
-    });
+    };
+    document.getElementById('fileInput').addEventListener('change', onFile);
+    document.getElementById('emptyFileInput')?.addEventListener('change', onFile);
 
     loadLatest();
   </script>
