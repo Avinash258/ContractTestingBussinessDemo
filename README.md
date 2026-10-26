@@ -75,7 +75,7 @@ Reports land in `reports/pact-report.html` and `reports/latest.json` (service ma
 | `URL_CLM` … `URL_DOC` | no | Direct service bases if not on same host |
 | `SMTP_USER` | no | Default in YAML: `avinashazureemail@gmail.com` (override OK) |
 | `SMTP_PASS` | **yes** | Gmail **App Password** (16 chars) — never commit; pipeline secret only |
-| `REPORT_EMAIL_TO` | no | Defaults to `avinash.sharma@newvision-software.com` |
+| `REPORT_EMAIL_TO` | no | Defaults to Avinash, Ananthi, Satyam (not Sandeep) |
 
 Email uses **Gmail SMTP** (`smtp.gmail.com:587`). Create app password: https://myaccount.google.com/apppasswords
 

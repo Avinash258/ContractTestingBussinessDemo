@@ -72,7 +72,7 @@ export async function sendReportEmail(options?: {
       contentType: 'application/octet-stream',
     });
   }
-  // FinVault default: compact body + zip; attach full HTML/JSON only if requested
+  // Default: compact TaxMesh body + dashboard zip; attach full HTML/JSON only if requested
   if (process.env.PACT_EMAIL_ATTACH_FULL_REPORT === 'true') {
     if (fs.existsSync(htmlPath)) {
       attachments.push({ filename: 'pact-report.html', path: htmlPath, contentType: 'text/html' });
@@ -148,11 +148,11 @@ export async function sendReportEmail(options?: {
     console.log(
       `Report email sent to ${to} with ${attachments.length} attachment(s) (messageId: ${info.messageId})`
     );
-    console.log('Email uses FinVault-style compact dashboard body + TaxMesh-Contract-Dashboard.zip.');
+    console.log('Email uses TaxMesh compact dashboard body + TaxMesh-Contract-Dashboard.zip.');
     fs.writeFileSync(emailSentMarker, new Date().toISOString(), 'utf8');
     return { sent: true, to, messageId: info.messageId };
   } catch (error: any) {
-    // Gmail 552 retry: text + zip only (FinVault pattern)
+    // Gmail 552 retry: text + zip only
     const blocked =
       String(error.message || '').includes('552') ||
       String(error.message || '').includes('BlockedMessage');

@@ -14,7 +14,7 @@ function encodeReportForHtmlEmbed(report: PactReport): string {
   return Buffer.from(JSON.stringify(report), 'utf8').toString('base64');
 }
 
-/** FinVault pattern: embed report so the zip works offline with no .js fetch. */
+/** Embed report so the zip works offline with no .js fetch. */
 function buildInlineReportBootstrapHtml(report: PactReport): string {
   const encoded = encodeReportForHtmlEmbed(report);
   return `<script id="pact-report-data" type="text/plain" data-encoding="base64">${encoded}</script>
@@ -46,7 +46,7 @@ function zipDirectory(sourceDir: string, zipPath: string) {
 }
 
 /**
- * Package interactive dashboard as zip (same layout as FinVault-Contract-Dashboard.zip):
+ * Package interactive TaxMesh dashboard as zip:
  *   index.html          — full KPI dashboard with embedded report
  *   service-map.html    — clickable map-only view
  *   data/report.json    — raw report

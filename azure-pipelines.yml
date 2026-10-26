@@ -17,7 +17,7 @@ parameters:
   - name: reportEmailTo
     displayName: 'Send HTML report to'
     type: string
-    default: 'avinash.sharma@newvision-software.com'
+    default: 'avinash.sharma@newvision-software.com,ananthi.balasubramanian@newvision-software.com,satyam.chouksey@newvision-software.com'
 
 trigger:
   branches:

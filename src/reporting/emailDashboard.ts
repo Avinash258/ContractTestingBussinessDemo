@@ -1,5 +1,5 @@
 /**
- * Email-safe HTML dashboard (ContractTestDemo / FinVault layout).
+ * Email-safe HTML dashboard for TaxMesh contract reports.
  * No JavaScript — works in Outlook / Gmail body.
  */
 import type { PactReport, ServiceMapNode } from './types';
@@ -62,7 +62,7 @@ function buildTopologyTable(serviceMap: PactReport['serviceMap']): string {
   const nodes = serviceMap?.nodes || [];
   if (!nodes.length) return '';
 
-  // TaxMesh chain (FinVault uses Frontend → nginx → Gateway)
+  // TaxMesh chain
   const chain = ['Client', 'Gateway'];
   const chainCells = chain
     .map((id) => nodes.find((node) => node.id === id))
