@@ -1,7 +1,7 @@
 import { createGatewayPact } from '../../src/pact/pactFactory';
-import { createJsonClient } from '../../src/clients/httpJson';
 import { MatchersV3 } from '@pact-foundation/pact';
 import axios from 'axios';
+import { httpAgent, httpsAgent } from '../../src/clients/httpAgent';
 
 const { like, string } = MatchersV3;
 
@@ -10,7 +10,10 @@ async function postJson(baseUrl: string, path: string, body: unknown = {}) {
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      Connection: 'close',
     },
+    httpAgent,
+    httpsAgent,
     validateStatus: () => true,
     timeout: 60_000,
   });
@@ -165,7 +168,9 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
             `${url}/api/filing/upload/${module}`,
             undefined,
             {
-              headers: { Accept: 'application/json' },
+              headers: { Accept: 'application/json', Connection: 'close' },
+              httpAgent,
+              httpsAgent,
               validateStatus: () => true,
               timeout: 15_000,
             }

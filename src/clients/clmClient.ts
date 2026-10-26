@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config';
+import { httpAgent, httpsAgent } from './httpAgent';
 import {
   assertSchema,
   clmContractsCatalogSchema,
@@ -19,7 +20,9 @@ export class ClmClient {
     this.http = axios.create({
       baseURL: baseUrl.replace(/\/$/, ''),
       timeout: 10_000,
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', Connection: 'close' },
+      httpAgent,
+      httpsAgent,
       validateStatus: () => true,
     });
   }

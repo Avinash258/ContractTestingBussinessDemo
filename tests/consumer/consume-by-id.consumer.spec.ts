@@ -18,9 +18,9 @@ const { like, string, boolean } = MatchersV3;
  * Consumer = TaxMesh-Client (orchestrator / gateway client).
  */
 describe('Service GET /consume/{contractId} (Swagger gap)', () => {
-  it.each(CONTRACTS.map((c) => [c.id, c] as const))(
-    '%s consumed by %s',
-    async (_id, ct: ContractDef) => {
+  it.each(CONTRACTS.map((c) => [c.id, c.consumer, c.producer, c] as const))(
+    '%s consumed by %s from %s',
+    async (_id, _consumer, _producer, ct: ContractDef) => {
       const provider = SERVICES[ct.consumer].pactProvider;
       const pact = createPact('TaxMesh-Client', provider);
       const path = `/consume/${ct.id}`;

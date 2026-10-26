@@ -2,10 +2,12 @@
 module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/tests/consumer/**/*.spec.ts'],
-  testTimeout: 30000,
+  setupFilesAfterEnv: ['<rootDir>/tests/consumer/jest.setup.ts'],
+  testTimeout: 60000,
   maxWorkers: 1,
   clearMocks: true,
   verbose: true,
+  watchPathIgnorePatterns: ['<rootDir>/pacts/', '<rootDir>/reports/'],
   transform: {
     '^.+\\.[tj]sx?$': 'babel-jest',
   },

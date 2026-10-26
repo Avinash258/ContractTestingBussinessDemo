@@ -37,17 +37,42 @@ function runConsumer(): { exitCode: number; results: any | null } {
     [
       'jest',
       '--runInBand',
+      '--ci',
       '--testPathPatterns=tests/consumer',
       '--json',
       `--outputFile=${outFile}`,
     ],
-    { cwd: root, stdio: 'inherit', shell: true }
+    {
+      cwd: root,
+      stdio: 'inherit',
+      shell: true,
+      env: {
+        ...process.env,
+        PACT_DO_NOT_TRACK: process.env.PACT_DO_NOT_TRACK || 'true',
+      },
+    }
   );
 
   let results = null;
   if (fs.existsSync(outFile)) {
     results = JSON.parse(fs.readFileSync(outFile, 'utf8'));
   }
+
+  if ((result.status ?? 1) !== 0 && results?.testResults) {
+    console.error('\n=== Failed consumer tests ===');
+    for (const suite of results.testResults) {
+      for (const assertion of suite.assertionResults || []) {
+        if (assertion.status === 'failed') {
+          console.error(`FAIL ${suite.name}`);
+          console.error(`  ${assertion.fullName}`);
+          for (const msg of assertion.failureMessages || []) {
+            console.error(String(msg).slice(0, 2000));
+          }
+        }
+      }
+    }
+  }
+
   return { exitCode: result.status ?? 1, results };
 }
 
