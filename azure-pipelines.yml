@@ -2,11 +2,31 @@
 # Azure DevOps: https://dev.azure.com/InnoVisionDA/ContractTesting
 # GitHub:       https://github.com/Avinash258/ContractTestingDemoProject
 #
-# Pipeline variables (secret where noted):
-#   GATEWAY_BASE_URL / TAXMESH_BASE_URL — TaxMesh gateway (required for provider)
-#   URL_CLM … URL_DOC                   — optional direct service bases
-#   SMTP_USER / SMTP_PASS (secret)      — email HTML report
-#   REPORT_EMAIL_TO / SMTP_FROM / SMTP_HOST / SMTP_PORT
+# Run pipeline UI parameters (recommended):
+#   gatewayBaseUrl  — TaxMesh gateway (required for provider)
+#   reportEmailTo   — HTML report recipient
+#
+# Optional pipeline variables (secrets where noted):
+#   GATEWAY_BASE_URL / TAXMESH_BASE_URL — fallback if UI param empty
+#   URL_CLM … URL_DOC
+#   SMTP_USER / SMTP_PASS (secret) — required to actually send email
+#   SMTP_FROM / SMTP_HOST / SMTP_PORT
+
+parameters:
+  - name: gatewayBaseUrl
+    displayName: 'TaxMesh gateway base URL (e.g. https://xxxx.ngrok-free.app)'
+    type: string
+    default: ''
+
+  - name: reportEmailTo
+    displayName: 'Send HTML report to (email)'
+    type: string
+    default: 'aviansh.sharma@newvision-software.com'
+
+  - name: skipProviderIfNoGateway
+    displayName: 'Skip provider job when gateway URL is empty (CI-friendly)'
+    type: boolean
+    default: false
 
 trigger:
   branches:
@@ -26,12 +46,13 @@ pool:
 variables:
   NODE_VERSION: '20.x'
   PACT_DO_NOT_TRACK: 'true'
-  REPORT_EMAIL_TO: 'aviansh.sharma@newvision-software.com'
   SMTP_HOST: 'smtp.office365.com'
   SMTP_PORT: '587'
   SMTP_FROM: 'aviansh.sharma@newvision-software.com'
-  # Override in pipeline UI for your live TaxMesh stack / tunnel
-  # GATEWAY_BASE_URL: 'https://your-taxmesh-host'
+  # Prefer Run-pipeline UI params; definition variables remain fallbacks in scripts
+  RUNTIME_GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
+  RUNTIME_REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
+  SKIP_PROVIDER_IF_NO_GATEWAY: ${{ parameters.skipProviderIfNoGateway }}
 
 stages:
   - stage: ContractTests
@@ -112,35 +133,54 @@ stages:
               normalize() {
                 local v="${1:-}"
                 case "$v" in
-                  ''|'$(GATEWAY_BASE_URL)'|'$(TAXMESH_BASE_URL)') echo "" ;;
+                  ''|'$(GATEWAY_BASE_URL)'|'$(TAXMESH_BASE_URL)'|'$(RUNTIME_GATEWAY_BASE_URL)') echo "" ;;
                   *) echo "$v" ;;
                 esac
               }
-              GATEWAY="$(normalize "${GATEWAY_BASE_URL:-}")"
+              GATEWAY="$(normalize "${RUNTIME_GATEWAY_BASE_URL:-}")"
+              if [ -z "$GATEWAY" ]; then
+                GATEWAY="$(normalize "${GATEWAY_BASE_URL:-}")"
+              fi
               if [ -z "$GATEWAY" ]; then
                 GATEWAY="$(normalize "${TAXMESH_BASE_URL:-}")"
               fi
+
               if [ -z "$GATEWAY" ]; then
-                echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is not set. Add it under Pipeline → Edit → Variables (e.g. https://your-taxmesh-host or ngrok URL). Provider verification needs a reachable TaxMesh gateway."
-                echo "##vso[task.complete result=Failed;]"
+                if [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-false}" = "True" ] || [ "${SKIP_PROVIDER_IF_NO_GATEWAY:-false}" = "true" ]; then
+                  echo "##vso[task.logissue type=warning]No gateway URL — skipping provider verification (skipProviderIfNoGateway=true)."
+                  echo "##vso[task.setvariable variable=PROVIDER_SKIPPED]true"
+                  exit 0
+                fi
+                echo "##vso[task.logissue type=error]No TaxMesh gateway URL. Use Run pipeline → 'TaxMesh gateway base URL', or set pipeline variable GATEWAY_BASE_URL."
                 exit 1
               fi
+
+              echo "##vso[task.setvariable variable=RESOLVED_GATEWAY_BASE_URL]$GATEWAY"
               echo "Pre-check gateway: $GATEWAY/api/health"
               if ! curl -sf --retry 8 --retry-delay 3 --connect-timeout 10 "$GATEWAY/api/health" | head -c 800; then
                 echo
-                echo "##vso[task.logissue type=error]Gateway health check failed for $GATEWAY/api/health — is TaxMesh running and reachable from the internet (ADO agents)?"
+                echo "##vso[task.logissue type=error]Gateway health check failed for $GATEWAY/api/health — is TaxMesh reachable from the internet?"
                 exit 1
               fi
               echo
             displayName: 'Pre-check — TaxMesh gateway health'
             env:
+              RUNTIME_GATEWAY_BASE_URL: $(RUNTIME_GATEWAY_BASE_URL)
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
+              SKIP_PROVIDER_IF_NO_GATEWAY: $(SKIP_PROVIDER_IF_NO_GATEWAY)
 
-          - script: npm run test:contract:provider-only
+          - script: |
+              if [ "${PROVIDER_SKIPPED:-}" = "true" ]; then
+                echo "Provider verification skipped (no gateway URL)."
+                exit 0
+              fi
+              export GATEWAY_BASE_URL="${RESOLVED_GATEWAY_BASE_URL:-${GATEWAY_BASE_URL:-}}"
+              npm run test:contract:provider-only
             displayName: 'Run provider verification + generate report'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
+              RESOLVED_GATEWAY_BASE_URL: $(RESOLVED_GATEWAY_BASE_URL)
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
               URL_CLM: $(URL_CLM)
@@ -152,23 +192,43 @@ stages:
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
+              PROVIDER_SKIPPED: $(PROVIDER_SKIPPED)
 
-          - script: |
-              if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
-                echo "SMTP_USER or SMTP_PASS not set — skipping email report."
+          - bash: |
+              set -euo pipefail
+              normalize_email() {
+                local v="${1:-}"
+                case "$v" in
+                  ''|'$(RUNTIME_REPORT_EMAIL_TO)'|'$(REPORT_EMAIL_TO)') echo "" ;;
+                  *) echo "$v" ;;
+                esac
+              }
+              TO="$(normalize_email "${RUNTIME_REPORT_EMAIL_TO:-}")"
+              if [ -z "$TO" ]; then
+                TO="$(normalize_email "${REPORT_EMAIL_TO:-}")"
+              fi
+              if [ -z "$TO" ]; then
+                echo "No report email recipient — skipping send."
                 exit 0
               fi
+              if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+                echo "SMTP_USER or SMTP_PASS not set — skipping email report (recipient would be: $TO)."
+                exit 0
+              fi
+              export REPORT_EMAIL_TO="$TO"
+              echo "Sending HTML report to: $REPORT_EMAIL_TO"
               npm run send-report
             displayName: 'Email HTML report'
             condition: succeededOrFailed()
             continueOnError: true
             env:
+              RUNTIME_REPORT_EMAIL_TO: $(RUNTIME_REPORT_EMAIL_TO)
+              REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
               SMTP_USER: $(SMTP_USER)
               SMTP_PASS: $(SMTP_PASS)
               SMTP_HOST: $(SMTP_HOST)
               SMTP_PORT: $(SMTP_PORT)
               SMTP_FROM: $(SMTP_FROM)
-              REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
