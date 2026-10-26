@@ -771,19 +771,27 @@
         <div class="body">
           <p class="meta">Consumer expectations recorded against the Pact mock server</p>
           <div class="table-controls">
-            <input type="search" id="consumerSearch" placeholder="Search endpoint / test / suite" />
-            <select id="consumerFilter">
+            <input type="search" id="consumerSearch" placeholder="Search endpoint / test / suite" aria-label="Search consumer tests" />
+            <select id="consumerFilter" aria-label="Filter consumer status">
               <option value="all">All</option>
               <option value="failed">Failed</option>
               <option value="passed">Passed</option>
             </select>
             <span class="meta" id="consumerCount"></span>
             <button type="button" class="secondary" id="consumerLoadMore">Load more</button>
+            <button type="button" class="secondary" id="consumerCsvBtn" aria-label="Export consumer CSV">Export CSV</button>
           </div>
           <div class="table-scroll">
-            <table>
+            <table id="consumerTableEl">
               <thead>
-                <tr><th>Endpoint</th><th>Test</th><th>Suite</th><th>Status</th><th>Reason</th><th>Duration</th></tr>
+                <tr>
+                  <th class="sortable" data-sort="endpoint">Endpoint</th>
+                  <th class="sortable" data-sort="name">Test</th>
+                  <th class="sortable" data-sort="suite">Suite</th>
+                  <th class="sortable" data-sort="status">Status</th>
+                  <th>Reason</th>
+                  <th class="sortable" data-sort="durationMs">Duration</th>
+                </tr>
               </thead>
               <tbody id="consumerTable"></tbody>
             </table>
@@ -800,21 +808,76 @@
         <div class="body">
           <p class="meta">Live API validated against generated pact files</p>
           <div class="table-controls">
-            <input type="search" id="providerSearch" placeholder="Search endpoint / interaction" />
-            <select id="providerFilter">
+            <input type="search" id="providerSearch" placeholder="Search endpoint / interaction / pact" aria-label="Search provider interactions" />
+            <select id="providerFilter" aria-label="Filter provider status">
               <option value="all">All</option>
               <option value="failed">Failed</option>
               <option value="passed">Passed</option>
             </select>
             <span class="meta" id="providerCount"></span>
             <button type="button" class="secondary" id="providerLoadMore">Load more</button>
+            <button type="button" class="secondary" id="providerCsvBtn" aria-label="Export provider CSV">Export CSV</button>
           </div>
           <div class="table-scroll">
-            <table>
+            <table id="providerTableEl">
               <thead>
-                <tr><th>Endpoint</th><th>Interaction</th><th>Status</th><th>Expected</th><th>Actual</th><th>Duration</th></tr>
+                <tr>
+                  <th class="sortable" data-sort="endpoint">Endpoint</th>
+                  <th class="sortable" data-sort="description">Interaction</th>
+                  <th class="sortable" data-sort="status">Status</th>
+                  <th>Expected</th>
+                  <th>Actual</th>
+                  <th class="sortable" data-sort="durationMs">Duration</th>
+                </tr>
               </thead>
               <tbody id="providerTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="card hidden" id="coverageSection">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
+          <h2>API coverage</h2>
+          <div class="section-badge-row" id="coverageSectionBadge"></div>
+        </summary>
+        <div class="body">
+          <p class="meta">Swagger ops vs Pact coverage (partial = upload 400-only path)</p>
+          <div class="chip-row" id="coverageChips"></div>
+          <div class="table-controls">
+            <input type="search" id="coverageSearch" placeholder="Search path / notes / operation" aria-label="Search coverage" />
+            <select id="coverageFilter" aria-label="Filter coverage status">
+              <option value="all">All statuses</option>
+              <option value="covered">Covered</option>
+              <option value="partial">Partial</option>
+              <option value="deferred">Deferred</option>
+              <option value="missing">Missing</option>
+            </select>
+            <select id="coverageMethodFilter" aria-label="Filter coverage method">
+              <option value="all">All methods</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+              <option value="PATCH">PATCH</option>
+            </select>
+            <span class="meta" id="coverageCount"></span>
+            <button type="button" class="secondary" id="coverageLoadMore">Load more</button>
+            <button type="button" class="secondary" id="coverageCsvBtn" aria-label="Export coverage CSV">Export CSV</button>
+          </div>
+          <div class="table-scroll">
+            <table id="coverageTableEl">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="method">Method</th>
+                  <th class="sortable" data-sort="path">Path</th>
+                  <th class="sortable" data-sort="status">Status</th>
+                  <th class="sortable" data-sort="operation">Operation</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="coverageTable"></tbody>
             </table>
           </div>
         </div>
@@ -827,11 +890,19 @@
           <span class="meta" id="pactFilesBadge"></span>
         </summary>
         <div class="body">
-          <p class="meta">Generated pact inventory for this run</p>
+          <p class="meta">Generated pact inventory — click a row to filter provider interactions</p>
+          <div class="table-controls">
+            <button type="button" class="secondary" id="pactCsvBtn" aria-label="Export pact files CSV">Export CSV</button>
+          </div>
           <div class="table-scroll">
-            <table>
+            <table id="pactFilesTableEl">
               <thead>
-                <tr><th>File</th></tr>
+                <tr>
+                  <th class="sortable" data-sort="file">File</th>
+                  <th class="sortable" data-sort="consumer">Consumer</th>
+                  <th class="sortable" data-sort="provider">Provider</th>
+                  <th class="sortable" data-sort="interactions">Interactions</th>
+                </tr>
               </thead>
               <tbody id="pactFilesTable"></tbody>
             </table>
@@ -846,10 +917,19 @@
         </summary>
         <div class="body">
           <p class="meta">Longest consumer and provider timings from this run</p>
+          <div class="table-controls">
+            <button type="button" class="secondary" id="slowCsvBtn" aria-label="Export slow CSV">Export CSV</button>
+          </div>
           <div class="table-scroll">
-            <table>
+            <table id="slowTableEl">
               <thead>
-                <tr><th>Phase</th><th>Endpoint</th><th>Name</th><th>Duration</th><th>Status</th></tr>
+                <tr>
+                  <th class="sortable" data-sort="phase">Phase</th>
+                  <th class="sortable" data-sort="endpoint">Endpoint</th>
+                  <th class="sortable" data-sort="name">Name</th>
+                  <th class="sortable" data-sort="durationMs">Duration</th>
+                  <th class="sortable" data-sort="status">Status</th>
+                </tr>
               </thead>
               <tbody id="slowTable"></tbody>
             </table>
@@ -878,7 +958,22 @@
     let currentReport = null;
     let consumerLimit = PAGE_SIZE;
     let providerLimit = PAGE_SIZE;
+    let coverageLimit = PAGE_SIZE;
     let selectedServiceId = null;
+    let providerPactFilter = '';
+    let sortState = {
+      consumer: { key: 'durationMs', dir: 'desc' },
+      provider: { key: 'durationMs', dir: 'desc' },
+      coverage: { key: 'path', dir: 'asc' },
+      pact: { key: 'file', dir: 'asc' },
+      slow: { key: 'durationMs', dir: 'desc' },
+    };
+    let lastTriedPaths = ['data/latest.js', 'data/latest.json'];
+
+    const SERVICE_COLORS = {
+      CLM: '#FDE68A', MDM: '#BFDBFE', ACC: '#BBF7D0', TAX: '#FBCFE8',
+      ALC: '#DDD6FE', DOC: '#FED7AA', Gateway: '#E2E8F0', Client: '#CFFAFE',
+    };
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -898,6 +993,20 @@
       return new Date(value).toLocaleString();
     }
 
+    function relativeTime(value) {
+      if (!value) return '—';
+      const then = new Date(value).getTime();
+      if (!Number.isFinite(then)) return '—';
+      const sec = Math.round((Date.now() - then) / 1000);
+      if (sec < 60) return `${sec}s ago`;
+      const min = Math.round(sec / 60);
+      if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+      const hr = Math.round(min / 60);
+      if (hr < 48) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+      const days = Math.round(hr / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
     function basename(filePath) {
       if (!filePath) return '—';
       const parts = String(filePath).split(/[/\\]/);
@@ -905,8 +1014,118 @@
     }
 
     function badge(status) {
-      const normalized = ['passed', 'failed', 'skipped'].includes(status) ? status : 'unknown';
-      return `<span class="badge ${normalized}">${normalized}</span>`;
+      const raw = String(status || 'unknown').toLowerCase();
+      const known = ['passed', 'failed', 'skipped', 'unknown', 'covered', 'deferred', 'partial'];
+      const normalized = known.includes(raw) ? raw : 'unknown';
+      const icon =
+        normalized === 'passed' || normalized === 'covered' ? '✓' :
+        normalized === 'failed' ? '✕' :
+        normalized === 'partial' ? '◐' :
+        normalized === 'deferred' ? '◌' : '–';
+      return `<span class="badge ${normalized}" title="${normalized}"><span aria-hidden="true">${icon}</span>${normalized}</span>`;
+    }
+
+    function methodPill(endpointOrMethod) {
+      const m = String(endpointOrMethod || '').trim().match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/i);
+      if (!m) return '';
+      const method = m[1].toUpperCase();
+      return `<span class="method-pill ${method}">${method}</span>`;
+    }
+
+    function endpointHtml(endpoint) {
+      const ep = String(endpoint || '—');
+      const method = methodPill(ep);
+      const path = ep.replace(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/i, '');
+      return `<span class="endpoint-cell">${method}<code>${escapeHtml(path || ep)}</code><button type="button" class="copy-btn" data-copy="${escapeHtml(ep)}" aria-label="Copy endpoint">Copy</button></span>`;
+    }
+
+    function svcChip(name) {
+      if (!name) return '—';
+      const key = Object.keys(SERVICE_COLORS).find((k) => String(name).includes(k)) || '';
+      const cls = key ? `svc-${key}` : '';
+      return `<span class="svc-chip ${cls}">${escapeHtml(name)}</span>`;
+    }
+
+    function durationHtml(ms, phase) {
+      const n = Number(ms) || 0;
+      const thresholds = phase === 'provider' ? [200, 500] : [50, 300];
+      const cls = n < thresholds[0] ? 'fast' : n <= thresholds[1] ? 'mid' : 'slow';
+      const width = Math.min(100, Math.round((n / (thresholds[1] * 1.5)) * 100));
+      return `<div class="dur ${cls}" title="${n} ms"><div class="dur-bar"><span style="width:${width}%"></span></div><span>${n}ms</span></div>`;
+    }
+
+    function showToast(message) {
+      const host = document.getElementById('toastHost');
+      if (!host) return;
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = message;
+      host.appendChild(el);
+      setTimeout(() => el.remove(), 4500);
+    }
+
+    function copyText(text) {
+      const value = String(text || '');
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(value).then(() => showToast('Copied')).catch(() => {});
+      }
+    }
+
+    function sortRows(rows, key, dir) {
+      const mul = dir === 'asc' ? 1 : -1;
+      return [...rows].sort((a, b) => {
+        const av = a[key];
+        const bv = b[key];
+        if (typeof av === 'number' || typeof bv === 'number') return ((Number(av) || 0) - (Number(bv) || 0)) * mul;
+        return String(av ?? '').localeCompare(String(bv ?? '')) * mul;
+      });
+    }
+
+    function exportCsv(filename, headers, rows) {
+      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const lines = [headers.map(esc).join(',')].concat(rows.map((r) => r.map(esc).join(',')));
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function readHashFilters() {
+      const hash = (location.hash || '').replace(/^#/, '');
+      if (!hash) return {};
+      return Object.fromEntries(hash.split('&').filter(Boolean).map((part) => {
+        const [k, v] = part.split('=');
+        return [decodeURIComponent(k || ''), decodeURIComponent(v || '')];
+      }));
+    }
+
+    function writeHashFilters(updates) {
+      const cur = { ...readHashFilters(), ...updates };
+      Object.keys(cur).forEach((k) => { if (!cur[k] || cur[k] === 'all') delete cur[k]; });
+      const next = Object.entries(cur).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+      history.replaceState(null, '', next ? `#${next}` : location.pathname + location.search);
+    }
+
+    function applyTheme(theme) {
+      const mode = theme === 'dark' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', mode);
+      const btn = document.getElementById('themeToggle');
+      if (btn) btn.textContent = mode === 'dark' ? 'Light mode' : 'Dark mode';
+      try { localStorage.setItem('taxmesh-dashboard-theme', mode); } catch { /* ignore */ }
+    }
+
+    function initTheme() {
+      let saved = null;
+      try { saved = localStorage.getItem('taxmesh-dashboard-theme'); } catch { /* ignore */ }
+      if (saved === 'dark' || saved === 'light') applyTheme(saved);
+      else applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }
+
+    function displayOrNotProvided(value) {
+      return value ? String(value) : 'Not provided';
     }
 
     const MAP_POSITIONS = {
