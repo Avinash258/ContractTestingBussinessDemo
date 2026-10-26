@@ -2,6 +2,7 @@ node_modules/
 dist/
 pacts/
 reports/
+dashboard/data/
 coverage/
 *.log
 .env
