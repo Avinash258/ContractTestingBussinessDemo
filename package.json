@@ -15,9 +15,11 @@
     "test:provider:alc": "ts-node --transpile-only tests/provider/alc.provider.verify.ts",
     "test:provider:doc": "ts-node --transpile-only tests/provider/doc.provider.verify.ts",
     "test:provider:gateway": "ts-node --transpile-only tests/provider/gateway.provider.verify.ts",
-    "test:contract": "npm run test:consumer && npm run test:provider",
-    "test:contract:consumer-only": "npm run test:consumer",
-    "test:contract:provider-only": "npm run test:provider"
+    "test:contract": "ts-node --transpile-only scripts/run-contract-ci.ts",
+    "test:contract:consumer-only": "ts-node --transpile-only scripts/run-contract-ci.ts --consumer-only",
+    "test:contract:provider-only": "ts-node --transpile-only scripts/run-contract-ci.ts --provider-only",
+    "send-report": "ts-node --transpile-only scripts/send-report.ts",
+    "report:open": "node -e \"console.log(require('path').resolve('reports/pact-report.html'))\""
   },
   "engines": {
     "node": ">=18"
@@ -29,9 +31,11 @@
     "@pact-foundation/pact": "^16.5.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.13.10",
+    "@types/nodemailer": "^6.4.24",
     "axios": "^1.8.4",
     "babel-jest": "^30.5.2",
     "jest": "^30.0.0",
+    "nodemailer": "^7.0.13",
     "ts-jest": "^29.3.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",

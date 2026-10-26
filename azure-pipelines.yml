@@ -1,125 +1,130 @@
-# Azure DevOps CI — TaxMesh Pact contract tests
-# Project: InnoVisionDA / ContractTesting
-# Repo:    https://github.com/Avinash258/ContractTestingDemoProject (main)
+# CI/CD: Pact contract tests gate (TaxMesh) — EY_Demo-style reporting
+# Azure DevOps: https://dev.azure.com/InnoVisionDA/ContractTesting
+# GitHub:       https://github.com/Avinash258/ContractTestingDemoProject
 #
-# In Azure DevOps CI designer: Existing Azure Pipelines YAML file → azure-pipelines.yml
-#
-# Variables (optional, Pipeline → Edit → Variables):
-#   GATEWAY_BASE_URL / TAXMESH_BASE_URL  — remote TaxMesh gateway (provider stage)
-#   URL_CLM, URL_MDM, URL_ACC, URL_TAX, URL_ALC, URL_DOC — direct service bases
-#   RUN_PROVIDER_VERIFY = true           — enable provider job (needs reachable APIs)
+# Pipeline variables (secret where noted):
+#   GATEWAY_BASE_URL / TAXMESH_BASE_URL — TaxMesh gateway (required for provider)
+#   URL_CLM … URL_DOC                   — optional direct service bases
+#   SMTP_USER / SMTP_PASS (secret)      — email HTML report
+#   REPORT_EMAIL_TO / SMTP_FROM / SMTP_HOST / SMTP_PORT
 
 trigger:
   branches:
     include:
       - main
+      - master
 
 pr:
   branches:
     include:
       - main
+      - master
 
 pool:
   vmImage: ubuntu-latest
 
 variables:
-  nodeVersion: '20.x'
-  npm_config_cache: $(Pipeline.Workspace)/.npm
-  # Default: consumer-only on Microsoft-hosted agents (no local TaxMesh ports).
-  # Set RUN_PROVIDER_VERIFY=true + service URLs for full verify (e.g. self-hosted).
-  RUN_PROVIDER_VERIFY: 'false'
+  NODE_VERSION: '20.x'
+  PACT_DO_NOT_TRACK: 'true'
+  REPORT_EMAIL_TO: 'aviansh.sharma@newvision-software.com'
+  SMTP_HOST: 'smtp.office365.com'
+  SMTP_PORT: '587'
+  SMTP_FROM: 'aviansh.sharma@newvision-software.com'
+  # Override in pipeline UI for your live TaxMesh stack / tunnel
+  # GATEWAY_BASE_URL: 'https://your-taxmesh-host'
 
 stages:
-  - stage: ConsumerContracts
-    displayName: Pact consumer tests
+  - stage: ContractTests
+    displayName: 'Pact Contract Tests'
     jobs:
-      - job: Consumer
-        displayName: Generate pacts
+      - job: ConsumerContracts
+        displayName: 'Consumer — generate pact files + report seed'
         steps:
           - checkout: self
-            fetchDepth: 1
 
           - task: NodeTool@0
-            displayName: Use Node.js $(nodeVersion)
+            displayName: 'Use Node.js $(NODE_VERSION)'
             inputs:
-              versionSpec: $(nodeVersion)
-
-          - task: Cache@2
-            displayName: Cache npm
-            inputs:
-              key: 'npm | "$(Agent.OS)" | package-lock.json'
-              restoreKeys: |
-                npm | "$(Agent.OS)"
-              path: $(npm_config_cache)
+              versionSpec: $(NODE_VERSION)
 
           - script: npm ci
-            displayName: npm ci
+            displayName: 'Install dependencies'
 
-          - script: npm run test:consumer
-            displayName: npm run test:consumer
+          - script: npm run test:contract:consumer-only
+            displayName: 'Run consumer contract tests + HTML/JSON report'
+            env:
+              PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
 
           - task: PublishPipelineArtifact@1
-            displayName: Publish pacts artifact
-            condition: always()
+            displayName: 'Publish pact files'
+            condition: succeededOrFailed()
             inputs:
-              targetPath: $(Build.SourcesDirectory)/pacts
-              artifact: pacts
-              publishLocation: pipeline
+              targetPath: $(System.DefaultWorkingDirectory)/pacts
+              artifact: pact-files
 
-          - task: PublishTestResults@2
-            displayName: Publish Jest JUnit (if present)
-            condition: always()
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish consumer reports'
+            condition: succeededOrFailed()
             inputs:
-              testResultsFormat: JUnit
-              testResultsFiles: '**/junit.xml'
-              mergeTestResults: true
-              failTaskOnFailedTests: false
-              testRunTitle: Pact consumer
+              targetPath: $(System.DefaultWorkingDirectory)/reports
+              artifact: pact-reports
 
-  - stage: ProviderVerification
-    displayName: Pact provider verification
-    dependsOn: ConsumerContracts
-    condition: and(succeeded(), eq(variables['RUN_PROVIDER_VERIFY'], 'true'))
-    jobs:
-      - job: Provider
-        displayName: Verify against TaxMesh
+      - job: ProviderVerification
+        displayName: 'Provider — verify TaxMesh APIs + email report'
+        dependsOn: ConsumerContracts
+        condition: succeeded()
         steps:
           - checkout: self
-            fetchDepth: 1
 
           - task: NodeTool@0
-            displayName: Use Node.js $(nodeVersion)
+            displayName: 'Use Node.js $(NODE_VERSION)'
             inputs:
-              versionSpec: $(nodeVersion)
+              versionSpec: $(NODE_VERSION)
 
           - script: npm ci
-            displayName: npm ci
+            displayName: 'Install dependencies'
 
           - task: DownloadPipelineArtifact@2
-            displayName: Download pacts from consumer stage
+            displayName: 'Download pact files'
             inputs:
               buildType: current
-              artifactName: pacts
-              targetPath: $(Build.SourcesDirectory)/pacts
+              artifactName: pact-files
+              targetPath: $(Pipeline.Workspace)/pact-files
+
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download consumer reports'
+            inputs:
+              buildType: current
+              artifactName: pact-reports
+              targetPath: $(Pipeline.Workspace)/pact-reports
+
+          - script: |
+              set -e
+              mkdir -p pacts reports
+              cp -r "$(Pipeline.Workspace)/pact-files/"* pacts/ || true
+              cp -r "$(Pipeline.Workspace)/pact-reports/"* reports/ || true
+              ls -la pacts reports || true
+            displayName: 'Restore pact files and consumer results'
 
           - bash: |
               set -euo pipefail
               GATEWAY="${GATEWAY_BASE_URL:-${TAXMESH_BASE_URL:-}}"
               if [ -z "$GATEWAY" ]; then
-                echo "##vso[task.logissue type=error]Set GATEWAY_BASE_URL or TAXMESH_BASE_URL when RUN_PROVIDER_VERIFY=true"
+                echo "##vso[task.logissue type=error]Set pipeline variable GATEWAY_BASE_URL (or TAXMESH_BASE_URL) to your TaxMesh gateway."
                 exit 1
               fi
-              echo "Probing gateway health: $GATEWAY/api/health"
-              curl -fsS --retry 5 --retry-delay 3 "$GATEWAY/api/health" | head -c 500
+              echo "Pre-check gateway: $GATEWAY/api/health"
+              curl -sf --retry 8 --retry-delay 3 "$GATEWAY/api/health" | head -c 800
               echo
-            displayName: Health-check TaxMesh gateway
+            displayName: 'Pre-check — TaxMesh gateway health'
             env:
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
 
-          - script: npm run test:provider
-            displayName: npm run test:provider
+          - script: npm run test:contract:provider-only
+            displayName: 'Run provider verification + generate report'
             env:
+              PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               TAXMESH_BASE_URL: $(TAXMESH_BASE_URL)
               URL_CLM: $(URL_CLM)
@@ -128,3 +133,33 @@ stages:
               URL_TAX: $(URL_TAX)
               URL_ALC: $(URL_ALC)
               URL_DOC: $(URL_DOC)
+              BUILD_BUILDID: $(Build.BuildId)
+              SYSTEM_COLLECTIONURI: $(System.CollectionUri)
+              SYSTEM_TEAMPROJECT: $(System.TeamProject)
+
+          - script: |
+              if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+                echo "SMTP_USER or SMTP_PASS not set — skipping email report."
+                exit 0
+              fi
+              npm run send-report
+            displayName: 'Email HTML report'
+            condition: succeededOrFailed()
+            continueOnError: true
+            env:
+              SMTP_USER: $(SMTP_USER)
+              SMTP_PASS: $(SMTP_PASS)
+              SMTP_HOST: $(SMTP_HOST)
+              SMTP_PORT: $(SMTP_PORT)
+              SMTP_FROM: $(SMTP_FROM)
+              REPORT_EMAIL_TO: $(REPORT_EMAIL_TO)
+              BUILD_BUILDID: $(Build.BuildId)
+              SYSTEM_COLLECTIONURI: $(System.CollectionUri)
+              SYSTEM_TEAMPROJECT: $(System.TeamProject)
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish provider + combined report'
+            condition: succeededOrFailed()
+            inputs:
+              targetPath: $(System.DefaultWorkingDirectory)/reports
+              artifact: pact-provider-report

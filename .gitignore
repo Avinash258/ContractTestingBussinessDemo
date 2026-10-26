@@ -1,6 +1,7 @@
 node_modules/
 dist/
 pacts/
+reports/
 coverage/
 *.log
 .env

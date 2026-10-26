@@ -43,29 +43,36 @@ npm run test:contract
 
 Override bases: `URL_CLM`, `URL_MDM`, … `GATEWAY_BASE_URL` / `TAXMESH_BASE_URL`.
 
-## Azure DevOps pipeline
+## Azure DevOps pipeline (EY_Demo-style gate + HTML report)
 
-Pipeline YAML: [`azure-pipelines.yml`](azure-pipelines.yml)  
-Org/project: `InnoVisionDA` / `ContractTesting` · GitHub repo `Avinash258/ContractTestingDemoProject` · branch `main`
+Pipeline: [`azure-pipelines.yml`](azure-pipelines.yml)  
+Pattern matches `InnoVisionDA/EY_Demo` contract gate: **Consumer → Provider → HTML/email report**.
 
-### Create the pipeline in Azure DevOps
+### Stages
 
-1. Open **Pipelines** → **New pipeline** (or finish the Node.js CI designer you started).
-2. Select **GitHub** → `Avinash258/ContractTestingDemoProject`.
-3. Choose **Existing Azure Pipelines YAML file** → path `/azure-pipelines.yml` → branch `main`.
-4. **Save and run**.
+1. **Consumer** — `npm run test:contract:consumer-only` → publish `pact-files` + `pact-reports`
+2. **Provider** — restore pacts → gateway health → `npm run test:contract:provider-only` → email report → publish `pact-provider-report`
 
-Default gate: **Pact consumer tests** (generates `pacts` artifact).  
-Provider verification is **off** on Microsoft-hosted agents (no TaxMesh on `localhost:410x`).
+Reports land in `reports/pact-report.html` and `reports/latest.json` (service map, CT matrix, failures).
 
-### Optional: enable provider verification
+### Create / update pipeline
 
-Pipeline → **Edit** → **Variables**:
+1. Azure DevOps → **ContractTesting** → Pipelines → New / Edit  
+2. GitHub repo `Avinash258/ContractTestingDemoProject`  
+3. Existing YAML → `/azure-pipelines.yml` on `main`  
+4. Set variables:
 
-| Variable | Example | Purpose |
+| Variable | Secret? | Purpose |
 |----------|---------|---------|
-| `RUN_PROVIDER_VERIFY` | `true` | Turn on provider stage |
-| `GATEWAY_BASE_URL` | TaxMesh gateway URL | Health check + gateway verify |
-| `URL_CLM` … `URL_DOC` | Direct service bases | Required for service provider verify |
+| `GATEWAY_BASE_URL` | no | TaxMesh gateway (required for provider job) |
+| `URL_CLM` … `URL_DOC` | no | Direct service bases if not on same host |
+| `SMTP_USER` / `SMTP_PASS` | **yes** | Email the HTML report |
+| `REPORT_EMAIL_TO` | no | Defaults in YAML |
 
-Use a **self-hosted agent** that can reach TaxMesh (or run the demo stack on that agent). Do not put PATs in YAML; use Azure DevOps secret variables / service connections only.
+### Local report run
+
+```bash
+npm run test:contract              # consumer + provider + HTML
+npm run test:contract:consumer-only
+npm run send-report                # needs SMTP_* env
+```
