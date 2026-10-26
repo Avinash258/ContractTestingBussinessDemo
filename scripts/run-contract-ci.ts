@@ -5,7 +5,8 @@
  *   npx ts-node --transpile-only scripts/run-contract-ci.ts --consumer-only
  *   npx ts-node --transpile-only scripts/run-contract-ci.ts --provider-only
  *   npx ts-node --transpile-only scripts/run-contract-ci.ts --services=CLM,MDM
- *   npx ts-node --transpile-only scripts/run-contract-ci.ts --services=CLM,MDM --consumer-only
+ *   npx ts-node --transpile-only scripts/run-contract-ci.ts --full-consumer --services=CLM,MDM
+ *     → all consumer specs; provider verify only CLM + MDM
  */
 import fs from 'fs';
 import path from 'path';
@@ -25,6 +26,10 @@ const root = process.cwd();
 const reportsDir = ensureReportsDir();
 const consumerOnly = process.argv.includes('--consumer-only');
 const providerOnly = process.argv.includes('--provider-only');
+/** Run every consumer spec even when --services / PACT_SERVICES scopes provider verify. */
+const fullConsumer =
+  process.argv.includes('--full-consumer') ||
+  /^(1|true|yes)$/i.test(String(process.env.PACT_FULL_CONSUMER || ''));
 
 const ALL_PROVIDERS: Array<ServiceId | 'Gateway'> = [
   'CLM',
@@ -91,14 +96,14 @@ const selectedServices = parseServicesArg();
 const scopedRun = !!selectedServices?.length;
 
 function consumerTestPathPattern(): string {
-  if (!selectedServices?.length) return 'tests/consumer';
+  if (fullConsumer || !selectedServices?.length) return 'tests/consumer';
   const fragments = new Set<string>();
   for (const service of selectedServices) {
     for (const frag of CONSUMER_SPEC_FRAGMENTS[service] || []) {
       fragments.add(frag);
     }
   }
-  // CLM+MDM scoped pair → CT-00 only (no gateway / other CT suite noise)
+  // CLM+MDM without --full-consumer → CT-00 only
   if (
     selectedServices.length === 2 &&
     selectedServices.includes('CLM') &&
@@ -115,22 +120,13 @@ function providerNameFor(service: ServiceId | 'Gateway'): string {
 
 /**
  * Providers to verify for this run.
- * CLM+MDM scope only generates CT-00 (MDM ← CLM), so MDM is a consumer — not a provider.
- * For other scoped runs, skip services that have no matching pact files after consumer gen.
+ * Scoped --services=CLM,MDM verifies those two when pact files exist (use --full-consumer
+ * so MDM-as-provider pacts from ACC/TAX/ALC/DOC consumers are generated).
  */
 function providersToRun(): Array<ServiceId | 'Gateway'> {
-  let candidates: Array<ServiceId | 'Gateway'>;
-  if (!selectedServices?.length) {
-    candidates = ALL_PROVIDERS;
-  } else if (
-    selectedServices.length === 2 &&
-    selectedServices.includes('CLM') &&
-    selectedServices.includes('MDM')
-  ) {
-    candidates = ['CLM'];
-  } else {
-    candidates = selectedServices.filter((s) => ALL_PROVIDERS.includes(s));
-  }
+  const candidates: Array<ServiceId | 'Gateway'> = !selectedServices?.length
+    ? ALL_PROVIDERS
+    : selectedServices.filter((s) => ALL_PROVIDERS.includes(s));
 
   if (!scopedRun) return candidates;
 
@@ -183,8 +179,8 @@ function listPactFiles(): string[] {
   });
 }
 
-function clearPactsDirForScopedRun() {
-  if (!scopedRun) return;
+function clearPactsDirBeforeConsumer() {
+  if (!scopedRun && !fullConsumer) return;
   const dir = config.pactsDir;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -193,17 +189,28 @@ function clearPactsDirForScopedRun() {
   for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.json'))) {
     fs.unlinkSync(path.join(dir, file));
   }
-  console.log(`Cleared previous pact files in ${dir} (scoped run)`);
+  console.log(
+    `Cleared previous pact files in ${dir} (${fullConsumer ? 'full-consumer' : 'scoped'} run)`
+  );
 }
 
 function runConsumer(): { exitCode: number; results: any | null } {
   const outFile = path.join(reportsDir, 'consumer-results.json');
   const pattern = consumerTestPathPattern();
   console.log('\n=== Consumer contract tests ===');
-  if (scopedRun) {
+  if (fullConsumer) {
+    console.log('Mode: full consumer suite (all specs)');
+    if (scopedRun) {
+      console.log(
+        `Provider scope (later): ${selectedServices!.join(', ')}`
+      );
+    }
+    console.log(`Jest testPathPatterns: ${pattern}\n`);
+    clearPactsDirBeforeConsumer();
+  } else if (scopedRun) {
     console.log(`Scoped services: ${selectedServices!.join(', ')}`);
     console.log(`Jest testPathPatterns: ${pattern}\n`);
-    clearPactsDirForScopedRun();
+    clearPactsDirBeforeConsumer();
   } else {
     console.log('');
   }

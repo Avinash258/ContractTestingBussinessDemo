@@ -95,11 +95,13 @@ stages:
 
           - script: |
               set -euo pipefail
-              echo "Consumer scope: ${PACT_SERVICES}"
-              npm run test:contract:consumer-only -- --services="${PACT_SERVICES}"
-            displayName: 'Run consumer contract tests (${{ parameters.services }})'
+              echo "Consumer: full suite (all modules)"
+              echo "Provider scope (next job): ${PACT_SERVICES}"
+              npm run test:contract:consumer-only -- --full-consumer
+            displayName: 'Run full consumer contract tests'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
+              PACT_FULL_CONSUMER: '1'
               PACT_SERVICES: $(PACT_SERVICES)
 
           # Full OpenAPI gate only when explicitly enabled (skipped for CLM+MDM-only runs)
