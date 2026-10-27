@@ -52,7 +52,6 @@ describe('MDM v2 API Contracts', () => {
         });
     });
   });
-  });
 
   describe('Negative Scenarios', () => {
     it('should return 404 for a non-existent entity', () => {

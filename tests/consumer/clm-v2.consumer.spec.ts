@@ -1,4 +1,4 @@
-import Pact from '@pact-foundation/pact';
+import * as Pact from '@pact-foundation/pact';
 import { deepLike } from '../../src/matchers/common';
 import fs from 'fs';
 import path from 'path';
