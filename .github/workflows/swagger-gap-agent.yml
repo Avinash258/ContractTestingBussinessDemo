@@ -1,0 +1,247 @@
+# Swagger ↔ Pact gap AI agent (GitHub Actions ONLY — not Azure DevOps).
+# Uses Azure OpenAI or OpenAI to implement missing contracts, re-runs tests,
+# and opens a PR with a before/after difference report.
+#
+# Secrets (required one set):
+#   AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY + AZURE_OPENAI_DEPLOYMENT
+#   — or OPENAI_API_KEY (optional OPENAI_MODEL)
+# Optional: GATEWAY_BASE_URL_OVERRIDE
+
+name: Swagger gap AI agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Consumer scope for re-exec (comma list or all)'
+        required: false
+        default: 'CLM,MDM'
+      max_turns:
+        description: 'Max agent tool turns'
+        required: false
+        default: '12'
+  workflow_run:
+    workflows: ['Contract tests']
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: swagger-gap-agent
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.x'
+  PACT_DO_NOT_TRACK: 'true'
+
+jobs:
+  decide:
+    name: Should run agent?
+    runs-on: ubuntu-latest
+    outputs:
+      run_agent: ${{ steps.gate.outputs.run_agent }}
+    steps:
+      - id: gate
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_agent=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # workflow_run: only when Contract tests completed (success or failure)
+          if [ "${{ github.event.workflow_run.conclusion }}" = "cancelled" ]; then
+            echo "run_agent=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Prefer running when contract job failed (likely swagger gaps); also allow success with manual follow-up via dispatch
+          if [ "${{ github.event.workflow_run.conclusion }}" = "failure" ]; then
+            echo "run_agent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_agent=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  gap-agent:
+    name: Audit → AI implement → re-exec → PR
+    needs: decide
+    if: needs.decide.outputs.run_agent == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require LLM secrets
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${AZURE_OPENAI_ENDPOINT:-}" ] && [ -n "${AZURE_OPENAI_API_KEY:-}" ] && [ -n "${AZURE_OPENAI_DEPLOYMENT:-}" ]; then
+            echo "Using Azure OpenAI deployment ${AZURE_OPENAI_DEPLOYMENT}"
+            exit 0
+          fi
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "Using OpenAI API"
+            exit 0
+          fi
+          echo "::error::No LLM configured. Set AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY + AZURE_OPENAI_DEPLOYMENT, or OPENAI_API_KEY."
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create agent branch
+        id: branch
+        run: |
+          set -euo pipefail
+          BRANCH="agent/swagger-gaps-${{ github.run_id }}"
+          git config user.name "taxmesh-swagger-gap-agent"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve gateway URL
+        env:
+          GATEWAY_BASE_URL_OVERRIDE: ${{ secrets.GATEWAY_BASE_URL_OVERRIDE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GATEWAY_BASE_URL_OVERRIDE:-}" ] && [ -n "${{ vars.GATEWAY_BASE_URL_OVERRIDE }}" ]; then
+            export GATEWAY_BASE_URL_OVERRIDE="${{ vars.GATEWAY_BASE_URL_OVERRIDE }}"
+          fi
+          URL="$(GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= node scripts/resolve-gateway-url.js)"
+          URL="${URL%/}"
+          URL="${URL%%/api-docs*}"
+          URL="${URL%/}"
+          echo "GATEWAY_BASE_URL=$URL" >> "$GITHUB_ENV"
+          echo "TAXMESH_BASE_URL=$URL" >> "$GITHUB_ENV"
+          echo "PACT_PROVIDER_URL=$URL" >> "$GITHUB_ENV"
+          echo "Resolved gateway: $URL"
+
+      - name: Snapshot gaps BEFORE
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          npm run test:swagger-coverage || true
+          cp reports/swagger-coverage.json reports/gaps-before.json
+          echo "Before missing: $(node -e "const c=require('./reports/gaps-before.json'); console.log((c.missing||[]).length)")"
+
+      - name: Skip if no missing gaps
+        id: has_gaps
+        run: |
+          set -euo pipefail
+          N="$(node -e "const c=require('./reports/gaps-before.json'); console.log((c.missing||[]).length)")"
+          echo "missing=$N" >> "$GITHUB_OUTPUT"
+          if [ "$N" = "0" ]; then
+            echo "No swagger gaps — agent not needed."
+          fi
+
+      - name: Run Swagger gap AI agent
+        if: steps.has_gaps.outputs.missing != '0'
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          SWAGGER_GAP_AGENT_MAX_TURNS: ${{ github.event.inputs.max_turns || '12' }}
+        run: npm run agent:swagger-gaps
+
+      - name: Re-exec consumer + swagger coverage
+        if: steps.has_gaps.outputs.missing != '0'
+        id: reexec
+        continue-on-error: true
+        env:
+          PACT_SERVICES: ${{ github.event.inputs.services || 'CLM,MDM' }}
+        run: |
+          set -euo pipefail
+          CONSUMER_STATUS=pass
+          SWAGGER_STATUS=pass
+          npm run test:consumer || CONSUMER_STATUS=fail
+          npm run test:swagger-coverage || SWAGGER_STATUS=fail
+          cp reports/swagger-coverage.json reports/gaps-after.json
+          node -e "const fs=require('fs'); fs.writeFileSync('reports/swagger-gap-reexec.json', JSON.stringify({consumer: process.argv[1], swagger: process.argv[2], at: new Date().toISOString()}, null, 2));" \
+            "$CONSUMER_STATUS" "$SWAGGER_STATUS"
+          echo "Re-exec consumer=$CONSUMER_STATUS swagger=$SWAGGER_STATUS"
+
+      - name: Build difference report
+        if: steps.has_gaps.outputs.missing != '0'
+        run: |
+          set -euo pipefail
+          if [ ! -f reports/gaps-after.json ]; then
+            cp reports/swagger-coverage.json reports/gaps-after.json 2>/dev/null || cp reports/gaps-before.json reports/gaps-after.json
+          fi
+          npm run agent:swagger-gaps:report
+
+      - name: Commit agent changes
+        if: steps.has_gaps.outputs.missing != '0'
+        id: commit
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --staged --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No file changes from agent."
+          else
+            git commit -m "chore(agent): close swagger pact gaps (run ${{ github.run_id }})"
+            git push -u origin HEAD
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open pull request
+        if: steps.has_gaps.outputs.missing != '0' && steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BODY_FILE=$(mktemp)
+          {
+            echo "## Swagger gap AI agent"
+            echo ""
+            echo "Automated gap close from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            echo ""
+            echo "**Azure DevOps does not run this agent** — GitHub Actions only."
+            echo ""
+            if [ -f reports/SWAGGER_GAP_AGENT_REPORT.md ]; then
+              echo "### Report"
+              echo ""
+              # Keep PR body reasonably sized
+              head -n 120 reports/SWAGGER_GAP_AGENT_REPORT.md
+            fi
+          } > "$BODY_FILE"
+          gh pr create \
+            --base main \
+            --head "${{ steps.branch.outputs.branch }}" \
+            --title "chore(agent): swagger gap close (${{ github.run_id }})" \
+            --body-file "$BODY_FILE" \
+            || gh pr create \
+              --base master \
+              --head "${{ steps.branch.outputs.branch }}" \
+              --title "chore(agent): swagger gap close (${{ github.run_id }})" \
+              --body-file "$BODY_FILE" \
+            || echo "PR may already exist or base branch differs."
+
+      - name: Upload gap artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-gap-agent-report
+          path: |
+            reports/gaps-before.json
+            reports/gaps-after.json
+            reports/swagger-gap-agent-summary.json
+            reports/SWAGGER_GAP_AGENT_REPORT.md
+            reports/swagger-coverage.json
+            docs/SWAGGER_GAP_COVERAGE.md
+          if-no-files-found: warn

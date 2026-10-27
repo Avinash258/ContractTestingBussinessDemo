@@ -1,0 +1,179 @@
+# TaxMesh Pact contract CI (GitHub Actions)
+# Mirrors azure-pipelines.yml consumer → swagger → provider flow.
+# No email and no AI agent here — email stays on Azure DevOps;
+# Swagger gap AI agent is .github/workflows/swagger-gap-agent.yml only.
+#
+# Gateway URL: gateway.config.json (optional secret/var GATEWAY_BASE_URL_OVERRIDE).
+
+name: Contract tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Services to run (CLM,MDM | all | comma list)'
+        required: false
+        default: 'CLM,MDM'
+      runSwaggerCoverageGate:
+        description: 'Run full Swagger coverage gate'
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: contract-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+  PACT_DO_NOT_TRACK: 'true'
+  PACT_SERVICES: ${{ github.event.inputs.services || 'CLM,MDM' }}
+
+jobs:
+  contract:
+    name: Consumer → Swagger → Provider
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve gateway URL
+        id: gateway
+        env:
+          # Prefer secret override; otherwise repository variable; else gateway.config.json
+          GATEWAY_BASE_URL_OVERRIDE: ${{ secrets.GATEWAY_BASE_URL_OVERRIDE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GATEWAY_BASE_URL_OVERRIDE:-}" ] && [ -n "${{ vars.GATEWAY_BASE_URL_OVERRIDE }}" ]; then
+            export GATEWAY_BASE_URL_OVERRIDE="${{ vars.GATEWAY_BASE_URL_OVERRIDE }}"
+          fi
+          URL="$(GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= node scripts/resolve-gateway-url.js)"
+          URL="${URL%/}"
+          URL="${URL%%/api-docs*}"
+          URL="${URL%/}"
+          echo "gateway=$URL" >> "$GITHUB_OUTPUT"
+          echo "GATEWAY_BASE_URL=$URL" >> "$GITHUB_ENV"
+          echo "TAXMESH_BASE_URL=$URL" >> "$GITHUB_ENV"
+          echo "PACT_PROVIDER_URL=$URL" >> "$GITHUB_ENV"
+          echo "Resolved gateway: $URL"
+
+      - name: Health check — gateway + scoped services
+        env:
+          PACT_SERVICES: ${{ env.PACT_SERVICES }}
+        run: |
+          set -euo pipefail
+          GATEWAY="${GATEWAY_BASE_URL}"
+          SERVICES="${PACT_SERVICES:-CLM,MDM}"
+          echo "Pre-check against: $GATEWAY (scope: $SERVICES)"
+          curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 \
+            "${GATEWAY}/api/health" | head -c 400
+          echo
+          IFS=',' read -ra SVC_ARR <<< "$SERVICES"
+          for raw in "${SVC_ARR[@]}"; do
+            svc="$(echo "$raw" | tr '[:lower:]' '[:upper:]' | xargs)"
+            if [ -z "$svc" ] || [ "$svc" = "ALL" ] || [ "$svc" = "GATEWAY" ]; then
+              continue
+            fi
+            echo "GET $GATEWAY/api/proxy/${svc}/health"
+            curl -sf --retry 5 --retry-delay 2 --connect-timeout 15 \
+              "${GATEWAY}/api/proxy/${svc}/health" | head -c 400
+            echo
+          done
+
+      - name: Run full consumer contract tests
+        id: consumer
+        continue-on-error: true
+        env:
+          PACT_FULL_CONSUMER: '1'
+          PACT_SERVICES: ${{ env.PACT_SERVICES }}
+        run: |
+          set -euo pipefail
+          echo "Consumer: full suite; provider scope next: ${PACT_SERVICES}"
+          npm run test:contract:consumer-only -- --full-consumer
+
+      - name: Swagger coverage gate (OpenAPI ↔ Pact)
+        id: swagger
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.runSwaggerCoverageGate != 'false' }}
+        continue-on-error: true
+        env:
+          SWAGGER_COVERAGE_FAIL: '1'
+          SWAGGER_COVERAGE_WRITE_DOC: '1'
+        run: |
+          set -euo pipefail
+          echo "Swagger coverage against: ${GATEWAY_BASE_URL}/openapi.json"
+          npm run test:swagger-coverage:ci
+
+      - name: Run provider verification + report
+        id: provider
+        continue-on-error: true
+        env:
+          PACT_SERVICES: ${{ env.PACT_SERVICES }}
+          BUILD_BUILDID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          echo "Provider verify against: $GATEWAY_BASE_URL (scope: $PACT_SERVICES)"
+          npm run test:contract:provider-only -- --services="${PACT_SERVICES}"
+
+      - name: Refresh report with coverage gaps
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run report:refresh
+
+      - name: Upload pact files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pact-files
+          path: pacts/
+          if-no-files-found: warn
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pact-reports
+          path: |
+            reports/
+            docs/SWAGGER_GAP_COVERAGE.md
+          if-no-files-found: warn
+
+      - name: Upload dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pact-dashboard
+          path: dashboard/
+          if-no-files-found: warn
+
+      - name: Fail job if consumer, swagger, or provider failed
+        if: always()
+        run: |
+          set -euo pipefail
+          failed=0
+          if [ "${{ steps.consumer.outcome }}" = "failure" ]; then
+            echo "::error::Consumer contract tests failed"
+            failed=1
+          fi
+          if [ "${{ steps.swagger.outcome }}" = "failure" ]; then
+            echo "::error::Swagger coverage gate failed (gaps or fetch error)"
+            failed=1
+          fi
+          if [ "${{ steps.provider.outcome }}" = "failure" ]; then
+            echo "::error::Provider verification failed"
+            failed=1
+          fi
+          exit "$failed"

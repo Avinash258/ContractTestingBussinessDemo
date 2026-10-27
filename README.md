@@ -93,6 +93,47 @@ npm run report:refresh             # rebuild Excel + dashboard from reports/pact
 
 Open the interactive UI at [`dashboard/index.html`](dashboard/index.html) (uses `dashboard/data/latest.json` / `latest.js`).
 
+## GitHub Actions
+
+Two workflows live under [`.github/workflows/`](.github/workflows/):
+
+| Workflow | File | Purpose |
+|----------|------|---------|
+| **Contract tests** | [`contract-tests.yml`](.github/workflows/contract-tests.yml) | Consumer → Swagger gate → Provider (artifacts). No email. |
+| **Swagger gap AI agent** | [`swagger-gap-agent.yml`](.github/workflows/swagger-gap-agent.yml) | **GHA only** — AI closes OpenAPI↔Pact gaps, re-runs tests, opens a PR with a before/after report |
+
+**Azure DevOps does not run the AI agent.** Email reports stay on Azure; the gap agent runs only on GitHub Actions.
+
+### Contract tests (GHA)
+
+- Triggers: push/PR to `main`/`master`, or **Actions → Contract tests → Run workflow**
+- Gateway URL from [`gateway.config.json`](gateway.config.json) (optional secret `GATEWAY_BASE_URL_OVERRIDE`)
+- Uploads artifacts: `pact-files`, `pact-reports`, `pact-dashboard`
+
+### Swagger gap AI agent (GHA only)
+
+1. Add **one** LLM secret set on the GitHub repo:
+   - `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_DEPLOYMENT`, **or**
+   - `OPENAI_API_KEY` (optional repo variable `OPENAI_MODEL`, default `gpt-4o`)
+2. Optional: `GATEWAY_BASE_URL_OVERRIDE`
+3. Run **Actions → Swagger gap AI agent → Run workflow** (or it auto-starts after a **failed** Contract tests run)
+4. Agent writes contracts under `tests/` / `src/` / `docs/`, re-runs consumer + swagger coverage, opens a PR with [`reports/SWAGGER_GAP_AGENT_REPORT.md`](reports/SWAGGER_GAP_AGENT_REPORT.md)
+
+Local dry-run (no LLM writes):
+
+```bash
+npm run test:swagger-coverage
+npm run agent:swagger-gaps:dry
+```
+
+Live local agent (needs LLM env):
+
+```bash
+npm run test:swagger-coverage
+npm run agent:swagger-gaps
+npm run agent:swagger-gaps:report
+```
+
 ## Report colours & regeneration
 
 Excel (`reports/TaxMesh-Contract-Report.xlsx`) and the dashboard share one status palette:
