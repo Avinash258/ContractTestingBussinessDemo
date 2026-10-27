@@ -202,7 +202,7 @@ export function collectCoveredConcrete(opts: {
   ];
   for (const p of filingPosts) add('POST', p, 'catalog:filing-post');
 
-  // Empty peer 404 contracts (testdata/common/empty-peer.json)
+  // Empty peer 404 contracts via Gateway proxy (testdata/common/empty-peer.json)
   try {
     const emptyPeerPath = path.resolve(
       process.cwd(),
@@ -210,16 +210,17 @@ export function collectCoveredConcrete(opts: {
     );
     if (fs.existsSync(emptyPeerPath)) {
       const emptyPeer = JSON.parse(fs.readFileSync(emptyPeerPath, 'utf8')) as {
-        cases?: Array<{ service: string; flow: string; peer: string }>;
+        cases?: Array<{
+          service: string;
+          flow: string;
+          peer: string;
+          gatewayPath?: string;
+        }>;
       };
       for (const c of emptyPeer.cases || []) {
-        const servicePath = `/${c.flow}/${c.peer}`;
-        add('GET', servicePath, `catalog:empty-peer:${c.service}`);
-        add(
-          'GET',
-          `/api/proxy/${c.service}${servicePath}`,
-          `catalog:empty-peer-proxy:${c.service}`
-        );
+        const gatewayPath =
+          c.gatewayPath || `/api/proxy/${c.service}/${c.flow}/${c.peer}`;
+        add('GET', gatewayPath, `catalog:empty-peer-gateway:${c.service}`);
       }
     }
   } catch {
