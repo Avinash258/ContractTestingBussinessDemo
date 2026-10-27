@@ -1,11 +1,18 @@
 # TaxMesh Pact contract CI pipeline (GitHub Actions)
 # Full gate: consumer → swagger → provider → report artifacts (+ optional email).
-# AI gap agent is a separate workflow: swagger-gap-agent.yml
+# On swagger gap failure, dispatches workflow "Swagger gap AI agent" to implement fixes on CI.
 #
 # Gateway URL: gateway.config.json (optional secret GATEWAY_BASE_URL_OVERRIDE).
 # Optional email secrets: SMTP_PASS, SMTP_USER, REPORT_EMAIL_TO
+# Gap agent LLM secrets (on repo): AZURE_OPENAI_* or OPENAI_API_KEY
 
 name: TaxMesh Contract Pipeline
+
+permissions:
+  contents: read
+  actions: write
+  checks: write
+  pull-requests: write
 
 on:
   push:
@@ -185,6 +192,20 @@ jobs:
           fi
           echo "Sending report email to: $REPORT_EMAIL_TO"
           npm run send-report
+
+      - name: Dispatch Swagger gap AI agent (on swagger failure)
+        if: always() && steps.swagger.outcome == 'failure'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Swagger gate failed — dispatching Swagger gap AI agent workflow…"
+          gh workflow run "Swagger gap AI agent" --ref "${{ github.ref_name }}" \
+            -f services="${{ env.PACT_SERVICES }}" \
+            -f max_turns=12 \
+            || gh workflow run swagger-gap-agent.yml --ref "${{ github.ref_name }}" \
+            || echo "::warning::Could not dispatch gap agent (check Actions permissions / workflow enabled)."
 
       - name: Fail job if consumer, swagger, or provider failed
         if: always()

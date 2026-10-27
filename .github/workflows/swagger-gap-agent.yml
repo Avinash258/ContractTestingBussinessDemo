@@ -21,12 +21,14 @@ on:
         required: false
         default: '12'
   workflow_run:
-    workflows: ['Contract tests']
+    # Must match `name:` in contract-tests.yml
+    workflows: ['TaxMesh Contract Pipeline']
     types: [completed]
 
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: swagger-gap-agent

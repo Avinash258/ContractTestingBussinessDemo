@@ -113,14 +113,23 @@ You can run **both** Azure DevOps and this GitHub Actions pipeline. The **AI gap
 - Uploads artifacts: `pact-files`, `pact-reports`, `pact-dashboard`
 - Optional email (same as Azure): set repo secrets `SMTP_PASS`, `REPORT_EMAIL_TO`, and optionally `SMTP_USER` / `SMTP_FROM`
 
-### Swagger gap AI agent (GHA only)
+### Swagger gap AI agent (GHA only — runs on CI)
 
-1. Add **one** LLM secret set on the GitHub repo:
-   - `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_DEPLOYMENT`, **or**
-   - `OPENAI_API_KEY` (optional repo variable `OPENAI_MODEL`, default `gpt-4o`)
-2. Optional: `GATEWAY_BASE_URL_OVERRIDE`
-3. Run **Actions → Swagger gap AI agent → Run workflow** (or it auto-starts after a **failed** Contract tests run)
-4. Agent writes contracts under `tests/` / `src/` / `docs/`, re-runs consumer + swagger coverage, opens a PR with [`reports/SWAGGER_GAP_AGENT_REPORT.md`](reports/SWAGGER_GAP_AGENT_REPORT.md)
+The agent **does not run on Azure DevOps**. On GitHub Actions it runs in two ways:
+
+1. **Automatic:** when **TaxMesh Contract Pipeline** fails the Swagger coverage gate, it dispatches **Swagger gap AI agent**
+2. **Manual:** Actions → **Swagger gap AI agent** → **Run workflow**
+
+**Required before the agent can fix gaps** — add repo secrets  
+(**Settings → Secrets and variables → Actions**):
+
+| Secret | Required |
+|--------|----------|
+| `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_DEPLOYMENT` | one set |
+| **or** `OPENAI_API_KEY` | alternate |
+| `GATEWAY_BASE_URL_OVERRIDE` | optional |
+
+Flow on CI: audit gaps → LLM implements Pact contracts → re-run consumer + swagger → open PR with before/after report (`reports/SWAGGER_GAP_AGENT_REPORT.md`).
 
 Local dry-run (no LLM writes):
 
