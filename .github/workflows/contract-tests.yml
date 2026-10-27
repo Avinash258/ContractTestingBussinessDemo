@@ -1,11 +1,11 @@
-# TaxMesh Pact contract CI (GitHub Actions)
-# Mirrors azure-pipelines.yml consumer → swagger → provider flow.
-# No email and no AI agent here — email stays on Azure DevOps;
-# Swagger gap AI agent is .github/workflows/swagger-gap-agent.yml only.
+# TaxMesh Pact contract CI pipeline (GitHub Actions)
+# Full gate: consumer → swagger → provider → report artifacts (+ optional email).
+# AI gap agent is a separate workflow: swagger-gap-agent.yml
 #
-# Gateway URL: gateway.config.json (optional secret/var GATEWAY_BASE_URL_OVERRIDE).
+# Gateway URL: gateway.config.json (optional secret GATEWAY_BASE_URL_OVERRIDE).
+# Optional email secrets: SMTP_PASS, SMTP_USER, REPORT_EMAIL_TO
 
-name: Contract tests
+name: TaxMesh Contract Pipeline
 
 on:
   push:
@@ -158,6 +158,33 @@ jobs:
           name: pact-dashboard
           path: dashboard/
           if-no-files-found: warn
+
+      - name: Email HTML report (optional)
+        if: always()
+        continue-on-error: true
+        env:
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: '587'
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
+          BUILD_BUILDID: ${{ github.run_id }}
+          BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SMTP_PASS:-}" ] || [ -z "${REPORT_EMAIL_TO:-}" ]; then
+            echo "SMTP_PASS / REPORT_EMAIL_TO not set — skipping email (artifacts still uploaded)."
+            exit 0
+          fi
+          if [ -z "${SMTP_USER:-}" ]; then
+            export SMTP_USER="avinashazureemail@gmail.com"
+          fi
+          if [ -z "${SMTP_FROM:-}" ]; then
+            export SMTP_FROM="$SMTP_USER"
+          fi
+          echo "Sending report email to: $REPORT_EMAIL_TO"
+          npm run send-report
 
       - name: Fail job if consumer, swagger, or provider failed
         if: always()

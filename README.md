@@ -93,22 +93,25 @@ npm run report:refresh             # rebuild Excel + dashboard from reports/pact
 
 Open the interactive UI at [`dashboard/index.html`](dashboard/index.html) (uses `dashboard/data/latest.json` / `latest.js`).
 
-## GitHub Actions
+## GitHub Actions (full pipeline + gap agent)
 
-Two workflows live under [`.github/workflows/`](.github/workflows/):
+Open: https://github.com/Avinash258/ContractTestingDemoProject/actions  
+
+If Actions is empty, enable it under **Settings → Actions → General → Allow all actions**.
 
 | Workflow | File | Purpose |
 |----------|------|---------|
-| **Contract tests** | [`contract-tests.yml`](.github/workflows/contract-tests.yml) | Consumer → Swagger gate → Provider (artifacts). No email. |
+| **TaxMesh Contract Pipeline** | [`contract-tests.yml`](.github/workflows/contract-tests.yml) | **Full GHA CI** — consumer → swagger → provider → artifacts (+ email if SMTP secrets set) |
 | **Swagger gap AI agent** | [`swagger-gap-agent.yml`](.github/workflows/swagger-gap-agent.yml) | **GHA only** — AI closes OpenAPI↔Pact gaps, re-runs tests, opens a PR with a before/after report |
 
-**Azure DevOps does not run the AI agent.** Email reports stay on Azure; the gap agent runs only on GitHub Actions.
+You can run **both** Azure DevOps and this GitHub Actions pipeline. The **AI gap agent runs only on GitHub Actions**, not on Azure.
 
-### Contract tests (GHA)
+### TaxMesh Contract Pipeline (GHA)
 
-- Triggers: push/PR to `main`/`master`, or **Actions → Contract tests → Run workflow**
+- Triggers: push/PR to `main`/`master`, or **Actions → TaxMesh Contract Pipeline → Run workflow**
 - Gateway URL from [`gateway.config.json`](gateway.config.json) (optional secret `GATEWAY_BASE_URL_OVERRIDE`)
 - Uploads artifacts: `pact-files`, `pact-reports`, `pact-dashboard`
+- Optional email (same as Azure): set repo secrets `SMTP_PASS`, `REPORT_EMAIL_TO`, and optionally `SMTP_USER` / `SMTP_FROM`
 
 ### Swagger gap AI agent (GHA only)
 
