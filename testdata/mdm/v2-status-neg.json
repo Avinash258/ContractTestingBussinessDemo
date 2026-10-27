@@ -1,5 +1,0 @@
-{
-  "error": "Invalid request parameters",
-  "code": "BAD_REQUEST",
-  "details": "The provided query parameters are malformed or missing required fields."
-}

@@ -202,20 +202,6 @@ export function collectCoveredConcrete(opts: {
   ];
   for (const p of filingPosts) add('POST', p, 'catalog:filing-post');
 
-  // Gateway v2 surface (dedicated consumer specs: clm-v2 / mdm-v2)
-  const gatewayV2: Array<{ method: string; path: string }> = [
-    { method: 'GET', path: '/api/proxy/CLM/v2/status' },
-    { method: 'GET', path: '/api/proxy/CLM/v2/engagement' },
-    { method: 'PATCH', path: '/api/proxy/CLM/v2/engagement' },
-    { method: 'GET', path: '/api/proxy/MDM/v2/status' },
-    { method: 'GET', path: '/api/proxy/MDM/v2/entity' },
-    { method: 'GET', path: '/api/proxy/MDM/v2/ownership' },
-    { method: 'GET', path: '/api/proxy/MDM/v2/partners' },
-  ];
-  for (const op of gatewayV2) {
-    add(op.method, op.path, 'catalog:gateway-v2');
-  }
-
   // Empty peer 404 contracts (testdata/common/empty-peer.json)
   try {
     const emptyPeerPath = path.resolve(

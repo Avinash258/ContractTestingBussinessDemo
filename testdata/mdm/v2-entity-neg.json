@@ -1,5 +1,0 @@
-{
-  "error": "Entity not found",
-  "code": "NOT_FOUND",
-  "details": "The requested entity ID E-999 does not exist in the master data registry."
-}
