@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 /**
  * Resolve TaxMesh gateway origin for Azure DevOps / shell.
- * Priority: GATEWAY_BASE_URL_OVERRIDE | GATEWAY_BASE_URL | TAXMESH_BASE_URL |
- *           PACT_PROVIDER_URL | gateway.config.json
+ *
+ * Local (default):
+ *   GATEWAY_BASE_URL_OVERRIDE | GATEWAY_BASE_URL | TAXMESH_BASE_URL |
+ *   PACT_PROVIDER_URL | gateway.config.json
+ *
+ * Azure DevOps (--ado):
+ *   ONLY a non-empty GATEWAY_BASE_URL_OVERRIDE (Run pipeline UI) wins.
+ *   Otherwise always gateway.config.json.
+ *   Ambient ADO library/pipeline vars named GATEWAY_BASE_URL are IGNORED
+ *   so a stale tunnel cannot override the repo config.
  *
  * Prints the URL to stdout. With --ado, also emits ##vso setvariable lines.
  */
@@ -25,16 +33,7 @@ function normalize(raw) {
   return g.replace(/\/$/, '');
 }
 
-function resolve() {
-  const override = normalize(
-    process.env.GATEWAY_BASE_URL_OVERRIDE ||
-      process.env.GATEWAY_BASE_URL ||
-      process.env.TAXMESH_BASE_URL ||
-      process.env.PACT_PROVIDER_URL ||
-      ''
-  );
-  if (override) return { url: override, source: 'env/override' };
-
+function fromConfig() {
   const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const url = normalize(cfg.gatewayBaseUrl);
   if (!url) {
@@ -43,11 +42,42 @@ function resolve() {
   return { url, source: 'gateway.config.json' };
 }
 
+function resolve(adoMode) {
+  const override = normalize(process.env.GATEWAY_BASE_URL_OVERRIDE || '');
+  if (override) {
+    return { url: override, source: 'GATEWAY_BASE_URL_OVERRIDE (pipeline UI)' };
+  }
+
+  // In ADO, ignore stale library vars (GATEWAY_BASE_URL / TAXMESH_BASE_URL / …).
+  // Locally, keep env overrides for developer convenience.
+  if (!adoMode) {
+    const fromEnv = normalize(
+      process.env.GATEWAY_BASE_URL ||
+        process.env.TAXMESH_BASE_URL ||
+        process.env.PACT_PROVIDER_URL ||
+        ''
+    );
+    if (fromEnv) return { url: fromEnv, source: 'env' };
+  }
+
+  return fromConfig();
+}
+
 const ado = process.argv.includes('--ado');
-const { url, source } = resolve();
+const { url, source } = resolve(ado);
 
 if (ado) {
   console.log(`Resolved TaxMesh gateway from ${source}: ${url}`);
+  if (
+    process.env.GATEWAY_BASE_URL &&
+    normalize(process.env.GATEWAY_BASE_URL) &&
+    normalize(process.env.GATEWAY_BASE_URL) !== url
+  ) {
+    console.log(
+      `##vso[task.logissue type=warning]Ignoring ADO variable GATEWAY_BASE_URL=${process.env.GATEWAY_BASE_URL} — using ${source} instead. Remove the pipeline/library variable or leave Override blank and edit gateway.config.json.`
+    );
+  }
+  // isOutput not required; job-scoped is enough for later steps in this job
   console.log(`##vso[task.setvariable variable=GATEWAY_BASE_URL]${url}`);
   console.log(`##vso[task.setvariable variable=TAXMESH_BASE_URL]${url}`);
   console.log(`##vso[task.setvariable variable=PACT_PROVIDER_URL]${url}`);

@@ -114,16 +114,21 @@ stages:
           # Full OpenAPI gate only when explicitly enabled (skipped for CLM+MDM-only runs)
           - script: |
               set -euo pipefail
+              node scripts/resolve-gateway-url.js --ado
+              export GATEWAY_BASE_URL="$(
+                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= \
+                node scripts/resolve-gateway-url.js
+              )"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+              export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
               echo "Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
               npm run test:swagger-coverage:ci
-            displayName: 'Swagger coverage gate (OpenAPI ? Pact)'
+            displayName: 'Swagger coverage gate (OpenAPI ↔ Pact)'
             condition: and(succeeded(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
             env:
-              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
-              TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
+              GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
               SWAGGER_COVERAGE_FAIL: '1'
               SWAGGER_COVERAGE_WRITE_DOC: '1'
 
@@ -191,19 +196,26 @@ stages:
             displayName: 'Copy pact files into workspace'
 
           # Health: gateway + scoped service proxies (default CLM + MDM)
+          # Re-resolve here so a stale ADO library GATEWAY_BASE_URL cannot win.
           - script: |
               set -euo pipefail
-              GATEWAY="${GATEWAY_BASE_URL:-${PACT_PROVIDER_URL:-${TAXMESH_BASE_URL:-}}}"
+              # Publish job vars from config (ignores stale ADO GATEWAY_BASE_URL)
+              node scripts/resolve-gateway-url.js --ado
+              # Blank ambient vars so stdout resolve cannot pick up a dead tunnel
+              GATEWAY="$(
+                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= \
+                node scripts/resolve-gateway-url.js
+              )"
               GATEWAY="${GATEWAY%/}"
-              # Allow pasting a full api-docs URL by mistake ? strip to origin
               GATEWAY="${GATEWAY%%/api-docs*}"
               GATEWAY="${GATEWAY%/}"
               SERVICES="${PACT_SERVICES:-CLM,MDM}"
               echo "Swagger-aligned pre-check against: $GATEWAY"
+              echo "  Source        : gateway.config.json (or Run pipeline Override)"
               echo "  Scope         : $SERVICES"
               echo "  GET $GATEWAY/api/health          (getGatewayHealth)"
               if [ -z "$GATEWAY" ]; then
-                echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is empty. Set Run pipeline ? TaxMesh gateway origin."
+                echo "##vso[task.logissue type=error]Gateway URL empty. Edit gateway.config.json or set Override gateway URL."
                 exit 1
               fi
               curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 \
@@ -220,13 +232,18 @@ stages:
                   "${GATEWAY}/api/proxy/${svc}/health" | head -c 400
                 echo
               done
-            displayName: 'Health check ? gateway + scoped services'
+            displayName: 'Health check — gateway + scoped services'
             env:
-              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
+              GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
               PACT_SERVICES: $(PACT_SERVICES)
 
           - script: |
               set -euo pipefail
+              node scripts/resolve-gateway-url.js --ado
+              export GATEWAY_BASE_URL="$(
+                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= \
+                node scripts/resolve-gateway-url.js
+              )"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
@@ -241,9 +258,7 @@ stages:
             displayName: 'Run provider verification + generate report (${{ parameters.services }})'
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
-              GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
-              TAXMESH_BASE_URL: $(GATEWAY_BASE_URL)
-              PACT_PROVIDER_URL: $(GATEWAY_BASE_URL)
+              GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
               PACT_SERVICES: $(PACT_SERVICES)
               BUILD_BUILDID: $(Build.BuildId)
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
