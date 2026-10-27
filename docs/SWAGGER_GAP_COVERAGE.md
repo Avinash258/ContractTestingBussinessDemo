@@ -7,7 +7,7 @@ Date: 2026-10-27
 
 | Swagger ops | Covered | Partial | Missing | Deferred |
 |-------------|---------|---------|---------|----------|
-| 114 | 114 | 0 | 0 | 0 |
+| 107 | 107 | 0 | 0 | 0 |
 
 ## Equivalent coverage note
 
