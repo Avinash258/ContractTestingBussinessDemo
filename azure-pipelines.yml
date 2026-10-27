@@ -111,7 +111,7 @@ stages:
               PACT_FULL_CONSUMER: '1'
               PACT_SERVICES: $(PACT_SERVICES)
 
-          # Full OpenAPI gate only when explicitly enabled (skipped for CLM+MDM-only runs)
+          # Full OpenAPI gate — still run after consumer failures when enabled
           - script: |
               set -euo pipefail
               node scripts/resolve-gateway-url.js --ado
@@ -126,7 +126,8 @@ stages:
               echo "Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
               npm run test:swagger-coverage:ci
             displayName: 'Swagger coverage gate (OpenAPI ↔ Pact)'
-            condition: and(succeeded(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
+            condition: and(succeededOrFailed(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
+            continueOnError: true
             env:
               GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
               SWAGGER_COVERAGE_FAIL: '1'
@@ -145,9 +146,10 @@ stages:
             condition: succeededOrFailed()
 
       - job: ProviderVerification
-        displayName: 'Provider ? verify API (${{ parameters.services }})'
+        displayName: 'Provider — verify API (${{ parameters.services }})'
         dependsOn: ConsumerContracts
-        condition: succeeded()
+        # Always continue after consumer (pass or fail) so provider + email still run
+        condition: succeededOrFailed()
         steps:
           - checkout: self
             fetchDepth: 0
@@ -183,17 +185,20 @@ stages:
 
           - download: current
             artifact: pact-files
+            continueOnError: true
 
           - download: current
             artifact: pact-reports
+            continueOnError: true
 
           - script: |
               set -e
               mkdir -p pacts reports
-              cp -r "$(Pipeline.Workspace)/pact-files/"* pacts/
+              cp -r "$(Pipeline.Workspace)/pact-files/"* pacts/ 2>/dev/null || echo "No pact-files artifact (consumer may have failed early)"
               cp -r "$(Pipeline.Workspace)/pact-reports/"* reports/ 2>/dev/null || true
               ls -la pacts reports || true
             displayName: 'Copy pact files into workspace'
+            condition: succeededOrFailed()
 
           # Health: gateway + scoped service proxies (default CLM + MDM)
           # Re-resolve here so a stale ADO library GATEWAY_BASE_URL cannot win.
@@ -233,6 +238,8 @@ stages:
                 echo
               done
             displayName: 'Health check — gateway + scoped services'
+            condition: succeededOrFailed()
+            continueOnError: true
             env:
               GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
               PACT_SERVICES: $(PACT_SERVICES)
@@ -256,6 +263,8 @@ stages:
               echo "  MDM proxy     : $GATEWAY_BASE_URL/api/proxy/MDM"
               npm run test:contract:provider-only -- --services="${PACT_SERVICES}"
             displayName: 'Run provider verification + generate report (${{ parameters.services }})'
+            condition: succeededOrFailed()
+            continueOnError: true
             env:
               PACT_DO_NOT_TRACK: $(PACT_DO_NOT_TRACK)
               GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
@@ -266,10 +275,11 @@ stages:
 
           # Host/user pinned to Gmail so ADO library vars (e.g. smtp.office365.com) cannot override.
           # Only SMTP_PASS comes from a secret pipeline variable (Gmail App Password).
+          # Always attempt email on success OR failure (consumer/provider/health).
           - script: |
               set -euo pipefail
               if [ -z "${SMTP_PASS:-}" ]; then
-                echo "SMTP_PASS not set ? skipping email report. Add secret variable SMTP_PASS = Gmail App Password."
+                echo "SMTP_PASS not set — skipping email report. Add secret variable SMTP_PASS = Gmail App Password."
                 exit 0
               fi
               # Collapse empty entries from pasted "a,,b" recipient lists
@@ -278,7 +288,7 @@ stages:
               echo "Sending HTML report to: ${REPORT_EMAIL_TO}"
               npm run send-report
             displayName: 'Email HTML report'
-            condition: succeededOrFailed()
+            condition: always()
             continueOnError: true
             env:
               SMTP_HOST: 'smtp.gmail.com'
