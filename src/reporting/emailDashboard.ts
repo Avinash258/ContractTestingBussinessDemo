@@ -210,6 +210,13 @@ export function buildEmailDashboardBody(
       reason: test.reason || '-',
     }));
 
+  const cov = report.coverage || {};
+  const consumerGaps = cov.gaps?.consumer || [];
+  const providerGaps = cov.gaps?.provider || [];
+  const hasGaps = consumerGaps.length > 0 || providerGaps.length > 0;
+  const isFailReport =
+    overall === 'failed' || hasGaps || overallFailed > 0;
+
   const failureSection = compact
     ? [
         failedProviderRows.length
@@ -229,17 +236,63 @@ export function buildEmailDashboardBody(
       ].join('')
     : '';
 
+  const gapBanner = isFailReport
+    ? `<div style="margin:0 0 16px;padding:14px 16px;border:1px solid #fecaca;border-radius:10px;background:#fef2f2">
+        <p style="margin:0;font-size:16px;font-weight:800;color:#991b1b">FAIL REPORT</p>
+        <p style="margin:6px 0 0;font-size:13px;color:#7f1d1d">
+          Contract and/or Swagger coverage gaps detected.
+          Consumer swagger gaps: <strong>${consumerGaps.length}</strong>
+          · Provider verification gaps: <strong>${providerGaps.length}</strong>
+          · Missing OpenAPI ops: <strong>${cov.totals?.missing ?? consumerGaps.length}</strong>
+        </p>
+      </div>`
+    : '';
+
+  const gapSection = [
+    consumerGaps.length
+      ? buildEndpointTable(
+          'Swagger gaps — missing in consumer / Pact',
+          consumerGaps.slice(0, 40).map((g) => ({
+            endpoint: `${g.method} ${g.path}`.trim(),
+            note: g.note || 'No consumer contract',
+            operation: g.operation || '—',
+          })),
+          [
+            { label: 'Operation', render: (r) => escapeHtml(r.endpoint) },
+            { label: 'Why', render: (r) => escapeHtml(r.note) },
+            { label: 'Op id', render: (r) => escapeHtml(r.operation) },
+          ]
+        )
+      : '',
+    providerGaps.length
+      ? buildEndpointTable(
+          'Gaps — missing / failed on provider',
+          providerGaps.slice(0, 40).map((g) => ({
+            endpoint: `${g.method} ${g.path}`.trim(),
+            note: g.note || 'Provider verification failed',
+            operation: g.operation || '—',
+          })),
+          [
+            { label: 'Endpoint', render: (r) => escapeHtml(r.endpoint) },
+            { label: 'Detail', render: (r) => escapeHtml(r.note) },
+            { label: 'Interaction', render: (r) => escapeHtml(r.operation) },
+          ]
+        )
+      : '',
+  ].join('');
+
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:16px;background:#ffffff;font-family:Segoe UI,sans-serif;color:#1f2937">
   <div style="max-width:720px;margin:0 auto">
-    <div style="padding:20px;border:1px solid #dbe3ef;border-radius:12px;background:#ffffff;margin-bottom:16px">
-      <p style="margin:0;font-size:20px;font-weight:700">TaxMesh Contract Test Report</p>
+    ${gapBanner}
+    <div style="padding:20px;border:1px solid ${isFailReport ? '#fecaca' : '#dbe3ef'};border-radius:12px;background:${isFailReport ? '#fff5f5' : '#ffffff'};margin-bottom:16px">
+      <p style="margin:0;font-size:20px;font-weight:700">TaxMesh Contract Test Report${isFailReport ? ' — FAIL' : ''}</p>
       <p style="margin:6px 0 0;font-size:13px;color:#6b7280">
         Target ${escapeHtml(targetUrl)}
         · Generated ${escapeHtml(report.generatedAt || '')}
       </p>
-      <p style="margin:12px 0 0;font-size:24px;font-weight:800;color:${overallColor}">${escapeHtml(overall.toUpperCase())}</p>
+      <p style="margin:12px 0 0;font-size:24px;font-weight:800;color:${isFailReport ? '#991b1b' : overallColor}">${escapeHtml((isFailReport ? 'failed' : overall).toUpperCase())}</p>
       ${artifactLinks ? `<p style="margin:12px 0 0;font-size:13px">${artifactLinks}</p>` : ''}
     </div>
 
@@ -247,12 +300,13 @@ export function buildEmailDashboardBody(
       <tr>
         ${metricCell('Consumer', `${consumer.passed || 0}/${consumer.total || 0}`, statusBadge(consumer.status))}
         ${metricCell('Provider', `${provider.passed || 0}/${provider.total || 0}`, statusBadge(provider.status))}
-        ${metricCell('Overall', `${overallPassed}/${overallTotal}`, `<span style="color:${overallColor};font-weight:700">${escapeHtml(overall.toUpperCase())}</span>`)}
-        ${metricCell('Failed', String(overallFailed), `${report.serviceMap?.summary?.failed || 0} service(s)`)}
+        ${metricCell('Overall', `${overallPassed}/${overallTotal}`, `<span style="color:${isFailReport ? '#991b1b' : overallColor};font-weight:700">${escapeHtml((isFailReport ? 'failed' : overall).toUpperCase())}</span>`)}
+        ${metricCell('Gaps', `${consumerGaps.length + providerGaps.length}`, `consumer ${consumerGaps.length} · provider ${providerGaps.length}`)}
       </tr>
     </table>
 
     ${topology}
+    ${gapSection}
     ${failureSection}
 
     <div style="margin:16px 0;padding:14px 16px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff">

@@ -8,13 +8,62 @@ import { loadCoverageRows, writeExcelReport } from './excelReport';
 import { config } from '../config';
 import type { InteractionResult, PactReport, PhaseStatus, PhaseSummary } from './types';
 
+function parseMethodPath(endpoint: string): { method: string; path: string } {
+  const m = String(endpoint || '')
+    .trim()
+    .match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(.+)$/i);
+  if (m) return { method: m[1].toUpperCase(), path: m[2] };
+  return { method: '', path: String(endpoint || '') };
+}
+
 function attachCoverage(report: PactReport): PactReport {
   const rows = loadCoverageRows();
-  if (!rows.length) return report;
+  const consumerGaps = rows
+    .filter((r) => r.status === 'missing')
+    .map((r) => ({
+      method: r.method,
+      path: r.path,
+      note: r.notes || 'No consumer/pact contract covers this OpenAPI operation',
+      operation: r.operation,
+    }));
+
+  // Provider gaps = failed provider interactions (verification against live API)
+  const providerGaps = (report.provider?.interactions || [])
+    .filter((ix) => ix.status === 'failed')
+    .map((ix) => {
+      const parsed = parseMethodPath(ix.endpoint || '');
+      return {
+        method: parsed.method || ix.method || '',
+        path: parsed.path || ix.path || ix.endpoint || '',
+        note: ix.reason || `${ix.expected || ''} → ${ix.actual || ''}`.trim() || 'Provider verification failed',
+        operation: ix.description || '',
+      };
+    });
+
+  // Also fold structured provider.failures if present
+  for (const failure of report.provider?.failures || []) {
+    const parsed = parseMethodPath(failure.endpoint || '');
+    const already = providerGaps.some(
+      (g) =>
+        g.path === (parsed.path || failure.endpoint) &&
+        g.operation === (failure.interaction || '')
+    );
+    if (already) continue;
+    providerGaps.push({
+      method: parsed.method,
+      path: parsed.path || failure.endpoint || '',
+      note: failure.reason || 'Provider verification failed',
+      operation: failure.interaction || '',
+    });
+  }
+
+  if (!rows.length && !providerGaps.length) return report;
+
   const covered = rows.filter((r) => r.status === 'covered').length;
   const partial = rows.filter((r) => r.status === 'partial').length;
   const deferred = rows.filter((r) => r.status === 'deferred').length;
   const missing = rows.filter((r) => r.status === 'missing').length;
+
   report.coverage = {
     totals: {
       ops: rows.length,
@@ -31,7 +80,17 @@ function attachCoverage(report: PactReport): PactReport {
       operation: r.operation,
       originalStatus: r.originalStatus,
     })),
+    gaps: {
+      consumer: consumerGaps,
+      provider: providerGaps,
+    },
   };
+
+  // Swagger / provider gaps force a FAIL report for email + dashboard
+  if (consumerGaps.length > 0 || providerGaps.length > 0) {
+    report.overallStatus = 'failed';
+  }
+
   return report;
 }
 

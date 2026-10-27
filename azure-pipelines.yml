@@ -273,9 +273,56 @@ stages:
               SYSTEM_COLLECTIONURI: $(System.CollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
 
+          # Swagger gap after provider — same gate as consumer job; gaps mark FAIL email
+          - script: |
+              set -euo pipefail
+              node scripts/resolve-gateway-url.js --ado
+              export GATEWAY_BASE_URL="$(
+                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= \
+                node scripts/resolve-gateway-url.js
+              )"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+              export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
+              echo "Provider-stage Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
+              npm run test:swagger-coverage:ci
+            displayName: 'Swagger coverage gate — provider stage (OpenAPI ↔ Pact)'
+            condition: and(succeededOrFailed(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
+            continueOnError: true
+            env:
+              GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
+              SWAGGER_COVERAGE_FAIL: '1'
+              SWAGGER_COVERAGE_WRITE_DOC: '1'
+
+          # Rebuild Excel/JSON/dashboard with coverage gaps (forces overall FAILED when gaps exist)
+          - script: |
+              set -euo pipefail
+              npm run report:refresh
+              node -e "
+                const fs=require('fs');
+                const p='reports/pact-report.json';
+                if(!fs.existsSync(p)) process.exit(0);
+                const r=JSON.parse(fs.readFileSync(p,'utf8'));
+                const cg=(r.coverage&&r.coverage.gaps&&r.coverage.gaps.consumer)||[];
+                const pg=(r.coverage&&r.coverage.gaps&&r.coverage.gaps.provider)||[];
+                console.log('Coverage gaps — consumer:', cg.length, 'provider:', pg.length, 'overall:', r.overallStatus);
+                if (cg.length) {
+                  console.log('Consumer/Pact missing:');
+                  cg.slice(0,20).forEach(g => console.log(' ', g.method, g.path));
+                }
+                if (pg.length) {
+                  console.log('Provider failures:');
+                  pg.slice(0,20).forEach(g => console.log(' ', g.method, g.path, '-', g.note||''));
+                }
+              "
+            displayName: 'Refresh report with swagger + provider gaps'
+            condition: succeededOrFailed()
+            continueOnError: true
+
           # Host/user pinned to Gmail so ADO library vars (e.g. smtp.office365.com) cannot override.
           # Only SMTP_PASS comes from a secret pipeline variable (Gmail App Password).
-          # Always attempt email on success OR failure (consumer/provider/health).
+          # Always attempt email on success OR failure (consumer/provider/health/swagger gaps).
           - script: |
               set -euo pipefail
               if [ -z "${SMTP_PASS:-}" ]; then
@@ -287,7 +334,7 @@ stages:
               echo "SMTP: ${SMTP_HOST} as ${SMTP_USER}"
               echo "Sending HTML report to: ${REPORT_EMAIL_TO}"
               npm run send-report
-            displayName: 'Email HTML report'
+            displayName: 'Email HTML report (FAIL when gaps)'
             condition: always()
             continueOnError: true
             env:

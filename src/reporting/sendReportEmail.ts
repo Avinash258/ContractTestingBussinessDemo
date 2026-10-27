@@ -113,27 +113,66 @@ export async function sendReportEmail(options?: {
     compact: true,
   });
 
-  const status = (report.overallStatus || 'unknown').toUpperCase();
-  const subject = `TaxMesh Contract Test Report — ${status}`;
+  const consumerGaps = report.coverage?.gaps?.consumer || [];
+  const providerGaps = report.coverage?.gaps?.provider || [];
+  const hasGaps = consumerGaps.length > 0 || providerGaps.length > 0;
+  const missingOps = report.coverage?.totals?.missing || 0;
+  const isFail =
+    report.overallStatus === 'failed' ||
+    hasGaps ||
+    (report.consumer?.failed || 0) > 0 ||
+    (report.provider?.failed || 0) > 0;
+  const status = (isFail ? 'failed' : report.overallStatus || 'unknown').toUpperCase();
+  const subject = isFail
+    ? `TaxMesh Contract FAIL — gaps consumer=${consumerGaps.length} provider=${providerGaps.length}`
+    : `TaxMesh Contract Test Report — ${status}`;
   const target =
     report.provider.providerBaseUrl ||
     report.environment.GATEWAY_BASE_URL ||
     'n/a';
+  const gapLines: string[] = [];
+  if (consumerGaps.length) {
+    gapLines.push('', `Swagger gaps missing in consumer/Pact (${consumerGaps.length}):`);
+    for (const g of consumerGaps.slice(0, 25)) {
+      gapLines.push(`  - ${g.method} ${g.path}${g.note ? ` — ${g.note}` : ''}`);
+    }
+    if (consumerGaps.length > 25) gapLines.push(`  … +${consumerGaps.length - 25} more`);
+  }
+  if (providerGaps.length) {
+    gapLines.push('', `Provider gaps / failures (${providerGaps.length}):`);
+    for (const g of providerGaps.slice(0, 25)) {
+      gapLines.push(`  - ${g.method} ${g.path}${g.note ? ` — ${g.note}` : ''}`);
+    }
+    if (providerGaps.length > 25) gapLines.push(`  … +${providerGaps.length - 25} more`);
+  }
   const text = [
     `TaxMesh Contract Test Report — ${status}`,
+    isFail ? '*** FAIL REPORT — review gaps below ***' : '',
     `Target ${target}`,
     `Generated ${report.generatedAt}`,
     '',
     `Consumer ${report.consumer.passed}/${report.consumer.total} ${report.consumer.status}`,
     `Provider ${report.provider.passed}/${report.provider.total} ${report.provider.status}`,
     `Overall ${(report.consumer.passed || 0) + (report.provider.passed || 0)}/${(report.consumer.total || 0) + (report.provider.total || 0)}`,
+    `Swagger missing ops: ${missingOps}`,
+    `Gaps: consumer ${consumerGaps.length} · provider ${providerGaps.length}`,
     buildUrl ? `Pipeline: ${buildUrl}` : '',
+    ...gapLines,
     '',
     'Unzip TaxMesh-Contract-Dashboard.zip and open index.html for the interactive map.',
     'Open TaxMesh-Contract-Report.xlsx for the multi-sheet Excel report.',
   ]
     .filter(Boolean)
     .join('\n');
+
+  const swaggerJson = path.join(reportsDir, 'swagger-coverage.json');
+  if (fs.existsSync(swaggerJson)) {
+    attachments.push({
+      filename: 'swagger-coverage.json',
+      path: swaggerJson,
+      contentType: 'application/json',
+    });
+  }
 
   console.log(`SMTP host: ${host}:${port}`);
   console.log(`Report recipients: ${to}`);

@@ -99,6 +99,14 @@ export interface PactReport {
       operation?: string;
       operationId?: string;
       originalStatus?: string;
+      evidence?: string[];
     }>;
+    /** Explicit gap lists for reports / failure email. */
+    gaps?: {
+      /** OpenAPI ops with no consumer/pact evidence (swagger coverage missing). */
+      consumer: Array<{ method: string; path: string; note?: string; operation?: string }>;
+      /** Provider verification failures or mismatched interactions. */
+      provider: Array<{ method: string; path: string; note?: string; operation?: string }>;
+    };
   };
 }
