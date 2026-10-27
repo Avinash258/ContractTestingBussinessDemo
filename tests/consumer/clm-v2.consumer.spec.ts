@@ -46,12 +46,11 @@ describe('CLM v2 API contracts (via Gateway proxy)', () => {
 
   it('GET /api/proxy/CLM/v2/engagement', async () => {
     const fixture = loadFixture('v2-engagement-pos');
-    const pathWithQuery = '/api/proxy/CLM/v2/engagement';
     await createGatewayPact()
       .addInteraction()
       .given('CLM has engagement ENG-200')
       .uponReceiving('a client request for CLM v2 engagement')
-      .withRequest('GET', pathWithQuery, (b) => {
+      .withRequest('GET', '/api/proxy/CLM/v2/engagement', (b) => {
         b.query({ id: 'ENG-200' });
         b.headers({ Accept: 'application/json' });
       })
@@ -62,7 +61,7 @@ describe('CLM v2 API contracts (via Gateway proxy)', () => {
       .executeTest(async ({ url }) => {
         const { status, data } = await getJson(
           createJsonClient(url),
-          `${pathWithQuery}?id=ENG-200`
+          '/api/proxy/CLM/v2/engagement?id=ENG-200'
         );
         expect(status).toBe(testDefaults.httpOk);
         expect(data.service).toBe(fixture.service);
@@ -73,12 +72,11 @@ describe('CLM v2 API contracts (via Gateway proxy)', () => {
 
   it('PATCH /api/proxy/CLM/v2/engagement without allowed fields → 400', async () => {
     const fixture = loadFixture('v2-engagement-patch');
-    const pathWithQuery = '/api/proxy/CLM/v2/engagement';
     await createGatewayPact()
       .addInteraction()
       .given('CLM has engagement ENG-200')
       .uponReceiving('a client PATCH CLM v2 engagement with invalid body')
-      .withRequest('PATCH', pathWithQuery, (b) => {
+      .withRequest('PATCH', '/api/proxy/CLM/v2/engagement', (b) => {
         b.query({ id: 'ENG-200' });
         b.headers({
           Accept: 'application/json',
@@ -92,7 +90,7 @@ describe('CLM v2 API contracts (via Gateway proxy)', () => {
       })
       .executeTest(async ({ url }) => {
         const res = await axios.patch(
-          `${url}${pathWithQuery}?id=ENG-200`,
+          `${url}/api/proxy/CLM/v2/engagement?id=ENG-200`,
           { status: 'Completed' },
           {
             headers: {

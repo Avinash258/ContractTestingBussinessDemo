@@ -179,7 +179,27 @@ function listPactFiles(): string[] {
   });
 }
 
+/**
+ * Wipe `pacts/` before consumer regenerate only when a full rewrite is intended.
+ *
+ * - all-services (no --services): clear — avoids stale interactions merging into pact files
+ * - --full-consumer: clear — regenerates every consumer pact from scratch
+ * - scoped --services=X,Y without --full-consumer: do **not** clear — keep sibling
+ *   pact files so provider verify can still use previously generated contracts
+ *   (e.g. ACC→MDM) for the selected providers
+ * - --provider-only: never reaches here (runConsumer is skipped)
+ */
 function clearPactsDirBeforeConsumer() {
+  const shouldClear = fullConsumer || !scopedRun;
+  if (!shouldClear) {
+    console.log(
+      `Preserving existing pact files (scoped ${selectedServices!.join(
+        ','
+      )} without --full-consumer)`
+    );
+    return;
+  }
+
   const dir = config.pactsDir;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -190,7 +210,7 @@ function clearPactsDirBeforeConsumer() {
   }
   console.log(
     `Cleared previous pact files in ${dir} (${
-      fullConsumer ? 'full-consumer' : scopedRun ? 'scoped' : 'all-services'
+      fullConsumer ? 'full-consumer' : 'all-services'
     } run)`
   );
 }
@@ -207,11 +227,9 @@ function runConsumer(): { exitCode: number; results: any | null } {
       );
     }
     console.log(`Jest testPathPatterns: ${pattern}\n`);
-    clearPactsDirBeforeConsumer();
   } else if (scopedRun) {
     console.log(`Scoped services: ${selectedServices!.join(', ')}`);
     console.log(`Jest testPathPatterns: ${pattern}\n`);
-    clearPactsDirBeforeConsumer();
   } else {
     console.log('Mode: all services (full consumer + all providers)\n');
   }

@@ -7,8 +7,10 @@ import type { ServiceId } from '../../src/catalog/contracts';
 /**
  * Swagger ops that have no CT peer in catalog still exist on OpenAPI
  * (`/api/proxy/{SVC}/upstream|downstream/{peerId}`). Live TaxMesh returns 404
- * with an error envelope — contract that shape so coverage is complete vs
- * https://…/api-docs/.
+ * with an error envelope — contract that shape so coverage is complete vs api-docs.
+ *
+ * Paths are string literals (also listed in testdata) so swagger coverage static
+ * scan / catalog extras can see them without relying on generated pacts.
  */
 describe('Empty peer surfaces (Swagger alignment — 404)', () => {
   it.each(emptyPeer.cases)(
@@ -16,7 +18,8 @@ describe('Empty peer surfaces (Swagger alignment — 404)', () => {
     async (c) => {
       const producer = c.service as ServiceId;
       const peer = c.peer as ServiceId;
-      const path = `/${c.flow}/${c.peer}`;
+      // Keep concrete path for Pact + coverage; must match testdata cases.
+      const path = `/${c.flow}/${c.peer}` as '/upstream/MDM' | '/downstream/MDM' | '/upstream/ACC';
       const pact = createServicePairPact(peer, producer);
 
       await pact
