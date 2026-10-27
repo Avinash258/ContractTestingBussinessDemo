@@ -1,5 +1,10 @@
 {
-  "status": "Active",
-  "lastSync": "2026-10-27T08:00:00Z",
-  "health": "Green"
+  "apiVersion": 2,
+  "service": "MDM",
+  "ready": true,
+  "needsClm": false,
+  "entityId": "ENT-DELTA-LP",
+  "legalName": "Delta Capital LP",
+  "partnerCount": 5,
+  "feeds": ["ACC", "TAX", "ALC", "DOC"]
 }

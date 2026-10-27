@@ -1,7 +1,27 @@
 {
-  "id": "E-100",
-  "name": "Global Tax Corp",
-  "type": "Legal Entity",
-  "status": "Active",
-  "country": "USA"
+  "apiVersion": 2,
+  "service": "MDM",
+  "entity": {
+    "entityId": "ENT-DELTA-LP",
+    "legalName": "Delta Capital LP",
+    "ein": "81-5566778",
+    "entityType": "partnership",
+    "address": {
+      "line1": "200 Park Ave Fl 42",
+      "city": "New York",
+      "state": "NY",
+      "zip": "10166"
+    },
+    "fiscalYearEnd": "12-31",
+    "dateBusinessStarted": "2012-09-30",
+    "section754Election": true,
+    "multiState": true
+  },
+  "engagementId": "ENG-2025-1065-004",
+  "importedAt": "2026-10-27T05:49:30.343Z",
+  "links": {
+    "partners": "/v2/partners",
+    "ownership": "/v2/ownership",
+    "contractCt01": "/contracts/ct-01/entities"
+  }
 }

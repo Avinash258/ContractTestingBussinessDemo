@@ -1,6 +1,25 @@
 {
+  "apiVersion": 2,
+  "service": "MDM",
+  "count": 5,
   "partners": [
-    { "id": "P-001", "name": "Partner A", "type": "Equity" },
-    { "id": "P-002", "name": "Partner B", "type": "Equity" }
-  ]
+    {
+      "partnerId": "P-301",
+      "name": "Blake Chen",
+      "tin": "***-**-9296",
+      "type": "individual",
+      "ownershipPct": 22.3,
+      "profitPct": 22.3,
+      "lossPct": 22.3,
+      "capitalAccount": "CA-301",
+      "beginningCapital": 555531,
+      "contributions": 37188,
+      "distributions": 65127
+    }
+  ],
+  "links": {
+    "entity": "/v2/entity",
+    "ownership": "/v2/ownership",
+    "contractCt03": "/contracts/ct-03/ownership"
+  }
 }

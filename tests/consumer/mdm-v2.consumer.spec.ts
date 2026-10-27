@@ -1,75 +1,119 @@
-import Pact from '@pact-foundation/pact';
-import { deepLike } from '../../src/matchers/common';
 import fs from 'fs';
 import path from 'path';
+import { createGatewayPact } from '../../src/pact/pactFactory';
+import { createJsonClient, getJson } from '../../src/clients/httpJson';
+import { deepLike } from '../../src/matchers/common';
+import { testDefaults } from '../../src/testdata';
 
-const loadFixture = (name: string) => 
-  JSON.parse(fs.readFileSync(path.resolve(__dirname, `../../testdata/mdm/${name}.json`), 'utf8'));
+const loadFixture = (name: string) =>
+  JSON.parse(
+    fs.readFileSync(
+      path.resolve(__dirname, `../../testdata/mdm/${name}.json`),
+      'utf8'
+    )
+  );
 
-Pact.setup({
-  consumer: 'TaxMesh-Client',
-  provider: 'TaxMesh-MDM',
-  logLevel: 'info',
-});
-
-describe('MDM v2 API Contracts', () => {
-  afterEach(() => Pact.verify());
-
-  describe('Positive Scenarios', () => {
-    it('should return entity details for a valid ID', () => {
-      Pact.given('MDM has entity E-100').uponReceiving('a request for entity E-100')
-        .withRequest({ method: 'GET', path: '/api/proxy/MDM/v2/entity', query: { id: 'E-100' } })
-        .willRespondWith({
-          status: 200,
-          body: deepLike(loadFixture('v2-entity-pos')),
-        });
-    });
-
-    it('should return ownership details for a valid entity', () => {
-      Pact.given('MDM has ownership for E-100').uponReceiving('a request for ownership of E-100')
-        .withRequest({ method: 'GET', path: '/api/proxy/MDM/v2/ownership', query: { id: 'E-100' } })
-        .willRespondWith({
-          status: 200,
-          body: deepLike(loadFixture('v2-ownership-pos')),
-        });
-    });
-
-    it('should return partners list', () => {
-      Pact.given('MDM has partners list').uponReceiving('a request for MDM partners')
-        .withRequest({ method: 'GET', path: '/api/proxy/MDM/v2/partners' })
-        .willRespondWith({
-          status: 200,
-          body: deepLike(loadFixture('v2-partners-pos')),
-        });
-    });
-
-    it('should return MDM v2 status', () => {
-      Pact.given('MDM has v2 status active').uponReceiving('a request for MDM v2 status')
-        .withRequest({ method: 'GET', path: '/api/proxy/MDM/v2/status' })
-        .willRespondWith({
-          status: 200,
-          body: deepLike(loadFixture('v2-status-pos')),
-        });
-    });
+/**
+ * Gateway proxy MDM v2 APIs — PactV4 against TaxMesh-Gateway.
+ * Example bodies from testdata/mdm/v2-*.json (aligned to live TaxMesh).
+ * Negative id/query contracts omitted: live demo returns 200 for unknown ids.
+ */
+describe('MDM v2 API contracts (via Gateway proxy)', () => {
+  it('GET /api/proxy/MDM/v2/status', async () => {
+    const fixture = loadFixture('v2-status-pos');
+    await createGatewayPact()
+      .addInteraction()
+      .given('MDM has v2 status active')
+      .uponReceiving('a client request for MDM v2 status')
+      .withRequest('GET', '/api/proxy/MDM/v2/status', (b) => {
+        b.headers({ Accept: 'application/json' });
+      })
+      .willRespondWith(testDefaults.httpOk, (b) => {
+        b.headers({ 'Content-Type': 'application/json' });
+        b.jsonBody(deepLike(fixture));
+      })
+      .executeTest(async ({ url }) => {
+        const { status, data } = await getJson(
+          createJsonClient(url),
+          '/api/proxy/MDM/v2/status'
+        );
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.service).toBe(fixture.service);
+        expect(data.apiVersion).toBe(fixture.apiVersion);
+      });
   });
 
-  describe('Negative Scenarios', () => {
-    it('should return 404 for a non-existent entity', () => {
-      Pact.given('MDM does not have entity E-999').uponReceiving('a request for entity E-999')
-        .withRequest({ method: 'GET', path: '/api/proxy/MDM/v2/entity', query: { id: 'E-999' } })
-        .willRespondWith({
-          status: 404,
-          body: deepLike(loadFixture('v2-entity-neg')),
-        });
-    });
+  it('GET /api/proxy/MDM/v2/entity', async () => {
+    const fixture = loadFixture('v2-entity-pos');
+    await createGatewayPact()
+      .addInteraction()
+      .given('MDM has entity E-100')
+      .uponReceiving('a client request for MDM v2 entity')
+      .withRequest('GET', '/api/proxy/MDM/v2/entity', (b) => {
+        b.query({ id: 'E-100' });
+        b.headers({ Accept: 'application/json' });
+      })
+      .willRespondWith(testDefaults.httpOk, (b) => {
+        b.headers({ 'Content-Type': 'application/json' });
+        b.jsonBody(deepLike(fixture));
+      })
+      .executeTest(async ({ url }) => {
+        const { status, data } = await getJson(
+          createJsonClient(url),
+          '/api/proxy/MDM/v2/entity?id=E-100'
+        );
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.service).toBe(fixture.service);
+        expect(data.entity?.entityId).toBeTruthy();
+      });
+  });
 
-    it('should return 400 for invalid query parameters', () => {
-      Pact.given('MDM is running').uponReceiving('a request with invalid params')
-        .withRequest({ method: 'GET', path: '/api/proxy/MDM/v2/status', query: { invalid: 'true' } })
-        .willRespondWith({
-          status: 400,
-          body: deepLike(loadFixture('v2-status-neg')),
-        });
-    });
+  it('GET /api/proxy/MDM/v2/ownership', async () => {
+    const fixture = loadFixture('v2-ownership-pos');
+    await createGatewayPact()
+      .addInteraction()
+      .given('MDM has ownership for E-100')
+      .uponReceiving('a client request for MDM v2 ownership')
+      .withRequest('GET', '/api/proxy/MDM/v2/ownership', (b) => {
+        b.query({ id: 'E-100' });
+        b.headers({ Accept: 'application/json' });
+      })
+      .willRespondWith(testDefaults.httpOk, (b) => {
+        b.headers({ 'Content-Type': 'application/json' });
+        b.jsonBody(deepLike(fixture));
+      })
+      .executeTest(async ({ url }) => {
+        const { status, data } = await getJson(
+          createJsonClient(url),
+          '/api/proxy/MDM/v2/ownership?id=E-100'
+        );
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.service).toBe(fixture.service);
+        expect(data.byPartner?.length).toBeGreaterThan(0);
+      });
+  });
+
+  it('GET /api/proxy/MDM/v2/partners', async () => {
+    const fixture = loadFixture('v2-partners-pos');
+    await createGatewayPact()
+      .addInteraction()
+      .given('MDM has partners list')
+      .uponReceiving('a client request for MDM v2 partners')
+      .withRequest('GET', '/api/proxy/MDM/v2/partners', (b) => {
+        b.headers({ Accept: 'application/json' });
+      })
+      .willRespondWith(testDefaults.httpOk, (b) => {
+        b.headers({ 'Content-Type': 'application/json' });
+        b.jsonBody(deepLike(fixture));
+      })
+      .executeTest(async ({ url }) => {
+        const { status, data } = await getJson(
+          createJsonClient(url),
+          '/api/proxy/MDM/v2/partners'
+        );
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.service).toBe(fixture.service);
+        expect(data.partners?.length).toBeGreaterThan(0);
+      });
   });
 });

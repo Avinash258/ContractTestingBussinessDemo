@@ -34,6 +34,10 @@ export function buildStateHandlers(): Record<string, () => Promise<void>> {
     'MDM has v2 status active': noop,
     'CLM has engagement ENG-200': noop,
     'CLM v2 status is healthy': noop,
+    'MDM is running': noop,
+    'CLM has no upstream contracts to MDM': noop,
+    'DOC has no downstream contracts to MDM': noop,
+    'MDM has no upstream contracts to ACC': noop,
   };
 
   for (const ct of CONTRACTS) {

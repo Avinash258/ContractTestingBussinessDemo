@@ -20,7 +20,7 @@ export const config = {
    * Per-service provider base URL (Swagger /api-docs).
    * Gateway catalog: GET {GATEWAY}/api/contracts  (operationId: listContracts)
    * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/�
-   * @see https://notifications-ads-cnet-room.trycloudflare.com/api-docs#/Gateway/listContracts
+   * @see https://marco-absolute-map-mailto.trycloudflare.com/api-docs#/Gateway/listContracts
    *
    * - URL_CLM / CLM_BASE_URL etc. win when set
    * - Else if GATEWAY_* env set ? `{GATEWAY}/api/proxy/{SERVICE_ID}`

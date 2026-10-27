@@ -1,5 +1,4 @@
 {
-  "id": "ENG-200",
-  "status": "Completed",
-  "updatedAt": "2026-10-27T10:00:00Z"
+  "apiVersion": 2,
+  "error": "Provide at least one of: entityName, taxYear, dueDate, formType, jurisdiction, states"
 }

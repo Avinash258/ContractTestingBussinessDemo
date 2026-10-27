@@ -1,6 +1,6 @@
 {
   "$schema": "./gateway.config.schema.json",
   "comment": "SINGLE SOURCE OF TRUTH — change gatewayBaseUrl here, then run: npm run sync:gateway",
-  "gatewayBaseUrl": "https://notifications-ads-cnet-room.trycloudflare.com/",
-  "localFallback": "https://notifications-ads-cnet-room.trycloudflare.com/"
+  "gatewayBaseUrl": "https://marco-absolute-map-mailto.trycloudflare.com/",
+  "localFallback": "https://marco-absolute-map-mailto.trycloudflare.com/"
 }

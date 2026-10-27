@@ -3,6 +3,7 @@
  */
 import defaults from '../../testdata/common/defaults.json';
 import envelope from '../../testdata/common/envelope.json';
+import emptyPeer from '../../testdata/common/empty-peer.json';
 
 import clmHealth from '../../testdata/clm/health.json';
 import clmContractsCatalog from '../../testdata/clm/contracts-catalog.json';
@@ -40,6 +41,7 @@ import ct17 from '../../testdata/contracts/CT-17.json';
 
 export const testDefaults = defaults;
 export const testEnvelope = envelope;
+export const emptyPeerCases = emptyPeer;
 
 export const clm = {
   health: clmHealth,

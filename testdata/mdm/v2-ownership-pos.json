@@ -1,7 +1,19 @@
 {
-  "id": "E-100",
-  "ownership": [
-    { "partnerId": "P-001", "share": 60.0, "role": "Majority" },
-    { "partnerId": "P-002", "share": 40.0, "role": "Minority" }
+  "apiVersion": 2,
+  "service": "MDM",
+  "partnerCount": 5,
+  "totals": {
+    "ownershipPct": 100,
+    "profitPct": 100,
+    "lossPct": 100
+  },
+  "valid": true,
+  "message": "Ownership totals 100%",
+  "byPartner": [
+    {
+      "partnerId": "P-301",
+      "name": "Blake Chen",
+      "ownershipPct": 22.3
+    }
   ]
 }

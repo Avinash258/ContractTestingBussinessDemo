@@ -1,0 +1,43 @@
+{
+  "cases": [
+    {
+      "service": "CLM",
+      "flow": "upstream",
+      "peer": "MDM",
+      "status": 404,
+      "state": "CLM has no upstream contracts to MDM",
+      "body": {
+        "error": "No upstream contracts from CLM → MDM",
+        "service": "CLM",
+        "peer": "MDM",
+        "flow": "upstream"
+      }
+    },
+    {
+      "service": "DOC",
+      "flow": "downstream",
+      "peer": "MDM",
+      "status": 404,
+      "state": "DOC has no downstream contracts to MDM",
+      "body": {
+        "error": "No downstream contracts from DOC → MDM",
+        "service": "DOC",
+        "peer": "MDM",
+        "flow": "downstream"
+      }
+    },
+    {
+      "service": "MDM",
+      "flow": "upstream",
+      "peer": "ACC",
+      "status": 404,
+      "state": "MDM has no upstream contracts to ACC",
+      "body": {
+        "error": "No upstream contracts from MDM → ACC",
+        "service": "MDM",
+        "peer": "ACC",
+        "flow": "upstream"
+      }
+    }
+  ]
+}

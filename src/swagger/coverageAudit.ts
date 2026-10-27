@@ -282,23 +282,6 @@ function classifyOp(
     (d) => d.method === op.method && d.pathPattern.test(op.path)
   );
 
-  // Empty peer templates: service has no CT edge in that direction
-  const peerTpl = op.path.match(
-    /^\/api\/proxy\/(CLM|MDM|ACC|TAX|ALC|DOC)\/(downstream|upstream)\/\{peerId\}$/
-  );
-  if (peerTpl) {
-    const svc = peerTpl[1] as ServiceId;
-    const flow = peerTpl[2] as 'downstream' | 'upstream';
-    if (!producerHasPeerDirection(svc, flow)) {
-      return {
-        ...op,
-        status: 'deferred',
-        evidence: [],
-        note: `${svc} has no ${flow} CT peer in catalog — empty peer surface`,
-      };
-    }
-  }
-
   const exact = evidence.get(opKey(op.method, op.path));
   if (exact?.length) {
     return {
@@ -335,6 +318,23 @@ function classifyOp(
         ...op,
         status: 'covered',
         evidence: svcEvidence.map((s) => `${s} (service-path equiv)`),
+      };
+    }
+  }
+
+  // Empty peer templates with no CT edge and no Pact evidence ? deferred
+  const peerTpl = op.path.match(
+    /^\/api\/proxy\/(CLM|MDM|ACC|TAX|ALC|DOC)\/(downstream|upstream)\/\{peerId\}$/
+  );
+  if (peerTpl) {
+    const svc = peerTpl[1] as ServiceId;
+    const flow = peerTpl[2] as 'downstream' | 'upstream';
+    if (!producerHasPeerDirection(svc, flow)) {
+      return {
+        ...op,
+        status: 'deferred',
+        evidence: [],
+        note: `${svc} has no ${flow} CT peer in catalog ? empty peer surface`,
       };
     }
   }

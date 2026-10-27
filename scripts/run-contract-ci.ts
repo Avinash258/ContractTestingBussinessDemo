@@ -180,7 +180,6 @@ function listPactFiles(): string[] {
 }
 
 function clearPactsDirBeforeConsumer() {
-  if (!scopedRun && !fullConsumer) return;
   const dir = config.pactsDir;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -190,7 +189,9 @@ function clearPactsDirBeforeConsumer() {
     fs.unlinkSync(path.join(dir, file));
   }
   console.log(
-    `Cleared previous pact files in ${dir} (${fullConsumer ? 'full-consumer' : 'scoped'} run)`
+    `Cleared previous pact files in ${dir} (${
+      fullConsumer ? 'full-consumer' : scopedRun ? 'scoped' : 'all-services'
+    } run)`
   );
 }
 
@@ -212,8 +213,9 @@ function runConsumer(): { exitCode: number; results: any | null } {
     console.log(`Jest testPathPatterns: ${pattern}\n`);
     clearPactsDirBeforeConsumer();
   } else {
-    console.log('');
+    console.log('Mode: all services (full consumer + all providers)\n');
   }
+  clearPactsDirBeforeConsumer();
   const result = spawnSync(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     [
