@@ -30,8 +30,8 @@ for TaxMesh CLM/MDM/ACC/TAX/ALC/DOC + Gateway.
 
 | Surface | URL |
 |---------|-----|
-| Swagger UI | `https://marco-absolute-map-mailto.trycloudflare.com/api-docs` |
-| OpenAPI JSON | `https://marco-absolute-map-mailto.trycloudflare.com/openapi.json` |
+| Swagger UI | `https://notifications-ads-cnet-room.trycloudflare.com/api-docs` |
+| OpenAPI JSON | `https://notifications-ads-cnet-room.trycloudflare.com/openapi.json` |
 | Local gateway | `http://127.0.0.1:4100/openapi.json` � UI `/api-docs` |
 
 Prefer the URL the user gives; otherwise try tunnel then local `:4100`.

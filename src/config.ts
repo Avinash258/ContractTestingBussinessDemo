@@ -3,7 +3,7 @@ import { GATEWAY_PACT, SERVICES, type ServiceId } from './catalog/contracts';
 import { resolveGatewayBaseUrl } from './gatewayConfig';
 
 /**
- * TaxMesh Pact config — full CT-00…CT-17 + gateway data-flow coverage.
+ * TaxMesh Pact config ï¿½ full CT-00ï¿½CT-17 + gateway data-flow coverage.
  * Live gateway URL: edit gateway.config.json (then npm run sync:gateway).
  */
 export const config = {
@@ -19,12 +19,12 @@ export const config = {
   /**
    * Per-service provider base URL (Swagger /api-docs).
    * Gateway catalog: GET {GATEWAY}/api/contracts  (operationId: listContracts)
-   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/…
-   * @see https://marco-absolute-map-mailto.trycloudflare.com/api-docs#/Gateway/listContracts
+   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/ï¿½
+   * @see https://notifications-ads-cnet-room.trycloudflare.com/api-docs#/Gateway/listContracts
    *
    * - URL_CLM / CLM_BASE_URL etc. win when set
    * - Else if GATEWAY_* env set ? `{GATEWAY}/api/proxy/{SERVICE_ID}`
-   * - Else local direct ports 4101–4106 (tunnel from gateway.config.json is for CI/Swagger)
+   * - Else local direct ports 4101ï¿½4106 (tunnel from gateway.config.json is for CI/Swagger)
    */
   serviceBaseUrl(serviceId: ServiceId): string {
     const envKey = `URL_${serviceId}`;

@@ -1,6 +1,6 @@
 # Swagger ? Pact coverage gap analysis
 
-Source: `https://marco-absolute-map-mailto.trycloudflare.com/openapi.json`
+Source: `https://notifications-ads-cnet-room.trycloudflare.com/openapi.json`
 Date: 2026-10-26
 
 ## Summary
@@ -13,10 +13,10 @@ Date: 2026-10-26
 
 | Method | Path | Note |
 |--------|------|------|
-| GET | `/api/proxy/CLM/upstream/{peerId}` | CLM has no upstream CT peer in catalog — empty peer surface |
-| GET | `/api/proxy/DOC/downstream/{peerId}` | DOC has no downstream CT peer in catalog — empty peer surface |
-| GET | `/api/proxy/MDM/upstream/{peerId}` | MDM has no upstream CT peer in catalog — empty peer surface |
+| GET | `/api/proxy/CLM/upstream/{peerId}` | CLM has no upstream CT peer in catalog ï¿½ empty peer surface |
+| GET | `/api/proxy/DOC/downstream/{peerId}` | DOC has no downstream CT peer in catalog ï¿½ empty peer surface |
+| GET | `/api/proxy/MDM/upstream/{peerId}` | MDM has no upstream CT peer in catalog ï¿½ empty peer surface |
 
 ## Equivalent coverage note
 
-Service Pact paths `/health`, `/contracts/ct-*`, `/downstream/{peer}` equal Swagger `/api/proxy/{SVC}/…` (gateway is a transparent proxy).
+Service Pact paths `/health`, `/contracts/ct-*`, `/downstream/{peer}` equal Swagger `/api/proxy/{SVC}/ï¿½` (gateway is a transparent proxy).

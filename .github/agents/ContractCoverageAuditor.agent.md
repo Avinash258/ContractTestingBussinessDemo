@@ -28,7 +28,7 @@ asks you to hand off to `TestCaseGenratorViaSwagger` or another authoring agent.
 
 | Surface | URL |
 |---------|-----|
-| OpenAPI JSON | `https://marco-absolute-map-mailto.trycloudflare.com/openapi.json` |
+| OpenAPI JSON | `https://notifications-ads-cnet-room.trycloudflare.com/openapi.json` |
 | Local | `http://127.0.0.1:4100/openapi.json` |
 
 ## Hard rules

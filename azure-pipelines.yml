@@ -1,7 +1,7 @@
 # CI/CD: Pact contract tests gate (TaxMesh)
 # Pattern reference: EY_Demo ContractTestDemo-Pact (build 260)
 # Gateway URL source of truth: gateway.config.json  (npm run sync:gateway)
-# Swagger (live): https://marco-absolute-map-mailto.trycloudflare.com/api-docs
+# Swagger (live): https://notifications-ads-cnet-room.trycloudflare.com/api-docs
 #   Gateway listContracts ? GET {TARGET}/api/contracts
 #   Service proxy         ? GET {TARGET}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/?
 # Project: https://dev.azure.com/InnoVisionDA/ContractTesting
@@ -22,9 +22,9 @@ parameters:
     default: 'CLM,MDM'
 
   - name: runSwaggerCoverageGate
-    displayName: 'Run full Swagger coverage gate (skip for CLM+MDM-only)'
+    displayName: 'Run full Swagger coverage gate (OpenAPI ↔ Pact)'
     type: boolean
-    default: false
+    default: true
 
   - name: reportEmailTo
     displayName: 'Send HTML report to'
