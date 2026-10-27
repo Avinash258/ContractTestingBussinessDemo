@@ -1,8 +1,9 @@
 import { MatchersV3 } from '@pact-foundation/pact';
+import { testDefaults } from '../testdata';
 
 const { string, like, eachLike, regex, boolean, integer } = MatchersV3;
 
-export const isoTimestamp = (example = '2025-10-26T10:00:00.000Z') =>
+export const isoTimestamp = (example = testDefaults.isoTimestamp) =>
   regex(/^\d{4}-\d{2}-\d{2}T[\d:.Z+-]+$/, example);
 
 /** Recursively wrap plain JSON into Pact `like` matchers (null stays nullValue). */
@@ -45,7 +46,7 @@ export function producerEnvelope(
 
 export function healthBody(serviceKey: string, producedExample: string) {
   return like({
-    status: string('ok'),
+    status: string(testDefaults.statusOk),
     service: string(serviceKey),
     produced: eachLike(string(producedExample), 1),
   });
@@ -108,11 +109,11 @@ export function gatewayFlowPairBody(
     payloads: eachLike(
       like({
         contractId: string(contractId),
-        title: string('title'),
+        title: string(contractId),
         sample: like({ contractId: string(contractId) }),
         live: like({
           ok: boolean(true),
-          httpStatus: integer(200),
+          httpStatus: integer(testDefaults.httpOk),
         }),
       }),
       1

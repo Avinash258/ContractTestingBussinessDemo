@@ -1,0 +1,19 @@
+{
+  "contractId": "CT-17",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "capitalRestatement": [
+    {
+      "partnerId": "P-001",
+      "beginning": 500000,
+      "ending": 658000,
+      "restatementReason": "Forms package capital rollforward"
+    },
+    {
+      "partnerId": "P-002",
+      "beginning": 320000,
+      "ending": 401000,
+      "restatementReason": "Forms package capital rollforward"
+    }
+  ]
+}

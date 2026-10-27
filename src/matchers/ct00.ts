@@ -1,5 +1,10 @@
 import { MatchersV3 } from '@pact-foundation/pact';
-import { engagementFixture, clmHealthFixture } from '../fixtures/engagement';
+import {
+  clmContractsCatalogFixture,
+  clmDownstreamMdmFixture,
+  clmHealthFixture,
+  engagementFixture,
+} from '../fixtures/engagement';
 
 const { string, integer, like, eachLike, regex } = MatchersV3;
 
@@ -31,28 +36,49 @@ export function clmHealthBody() {
   return like({
     status: string(clmHealthFixture.status),
     service: string(clmHealthFixture.service),
-    produced: eachLike(string('CT-00'), 1),
-    consumed: like([]),
+    produced: eachLike(string(clmHealthFixture.produced[0]), 1),
+    consumed: like(clmHealthFixture.consumed),
   });
 }
 
 export function clmContractsCatalogBody() {
+  const svc = clmContractsCatalogFixture.service;
+  const produced = clmContractsCatalogFixture.produced[0];
   return like({
     service: like({
-      id: string('CLM'),
-      name: string('Client Management'),
-      port: integer(4101),
+      id: string(svc.id),
+      name: string(svc.name),
+      port: integer(svc.port),
     }),
     produced: eachLike(
       like({
-        id: string('CT-00'),
-        producer: string('CLM'),
-        consumer: string('MDM'),
-        direction: string('downstream'),
-        path: string('/contracts/ct-00/engagement-context'),
+        id: string(produced.id),
+        producer: string(produced.producer),
+        consumer: string(produced.consumer),
+        direction: string(produced.direction),
+        path: string(produced.path),
       }),
       1
     ),
-    consumed: like([]),
+    consumed: like(clmContractsCatalogFixture.consumed),
+  });
+}
+
+export function clmDownstreamMdmBody() {
+  const edge = clmDownstreamMdmFixture;
+  const c = edge.contracts[0];
+  return like({
+    service: string(edge.service),
+    peer: string(edge.peer),
+    flow: string(edge.flow),
+    contracts: eachLike(
+      like({
+        id: string(c.id),
+        producer: string(c.producer),
+        consumer: string(c.consumer),
+      }),
+      1
+    ),
+    payloads: eachLike(ct00EngagementBody(), 1),
   });
 }

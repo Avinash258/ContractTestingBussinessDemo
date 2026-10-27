@@ -6,6 +6,7 @@ import {
   ct04FilingMetaFixture,
   mdmHealthFixture,
 } from '../fixtures/mdm';
+import { testEnvelope } from '../testdata';
 
 const { string, integer, boolean, number, like, eachLike, regex, nullValue } =
   MatchersV3;
@@ -14,19 +15,19 @@ const isoTimestamp = (example: string) =>
   regex(/^\d{4}-\d{2}-\d{2}T[\d:.Z+-]+$/, example);
 
 const producerEnvelope = (consumer: string) => ({
-  producer: string('MDM'),
+  producer: string(testEnvelope.producer),
   consumer: string(consumer),
-  direction: string('downstream'),
-  flow: string('downstream'),
-  producedAt: isoTimestamp('2025-10-26T10:00:00.000Z'),
+  direction: string(testEnvelope.direction),
+  flow: string(testEnvelope.flow),
+  producedAt: isoTimestamp(testEnvelope.producedAt),
 });
 
 export function mdmHealthBody() {
   return like({
     status: string(mdmHealthFixture.status),
     service: string(mdmHealthFixture.service),
-    produced: eachLike(string('CT-01'), 1),
-    consumed: eachLike(string('CT-00'), 1),
+    produced: eachLike(string(mdmHealthFixture.produced[0]), 1),
+    consumed: eachLike(string(mdmHealthFixture.consumed[0]), 1),
   });
 }
 
@@ -45,7 +46,7 @@ export function ct01EntitiesBody() {
       }),
       1
     ),
-    ...producerEnvelope('ACC'),
+    ...producerEnvelope(ct01EntitiesFixture.consumer),
   });
 }
 
@@ -59,10 +60,10 @@ export function ct02TaxAttributesBody() {
       filingType: string(t.filingType),
       fiscalYearEnd: string(t.fiscalYearEnd),
       multiState: boolean(t.multiState),
-      states: eachLike(string('NY'), 1),
+      states: eachLike(string(t.states[0]), 1),
       section754Election: boolean(t.section754Election),
     }),
-    ...producerEnvelope('TAX'),
+    ...producerEnvelope(ct02TaxAttributesFixture.consumer),
   });
 }
 
@@ -81,7 +82,7 @@ export function ct03OwnershipBody() {
       }),
       1
     ),
-    ...producerEnvelope('ALC'),
+    ...producerEnvelope(ct03OwnershipFixture.consumer),
   });
 }
 
@@ -92,12 +93,12 @@ export function ct04FilingMetaBody() {
     engagementId: string(ct04FilingMetaFixture.engagementId),
     entityId: string(ct04FilingMetaFixture.entityId),
     filingMeta: like({
-      formSet: eachLike(string('1065'), 1),
+      formSet: eachLike(string(f.formSet[0]), 1),
       jurisdiction: string(f.jurisdiction),
       printPackageId: nullValue(),
       dueDate: string(f.dueDate),
     }),
-    ...producerEnvelope('DOC'),
+    ...producerEnvelope(ct04FilingMetaFixture.consumer),
   });
 }
 
@@ -107,13 +108,13 @@ export function mdmDownstreamPeerBody(
   payloadBody: unknown
 ) {
   return like({
-    service: string('MDM'),
+    service: string(testEnvelope.producer),
     peer: string(peer),
-    flow: string('downstream'),
+    flow: string(testEnvelope.flow),
     contracts: eachLike(
       like({
         id: string(contractId),
-        producer: string('MDM'),
+        producer: string(testEnvelope.producer),
         consumer: string(peer),
       }),
       1

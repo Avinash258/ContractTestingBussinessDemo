@@ -5,10 +5,12 @@ import {
   ct02TaxAttributesBody,
   mdmDownstreamPeerBody,
 } from '../../src/matchers/mdm';
+import { ct02TaxAttributesFixture } from '../../src/fixtures/mdm';
 
 describe('TAX ← MDM contracts (CT-02)', () => {
   const ct = config.mdm.contracts.ct02;
   const pact = createMdmPact(ct.consumer);
+  const fixture = ct02TaxAttributesFixture;
 
   it('GET /contracts/ct-02/tax-attributes — entity tax attributes', async () => {
     await pact
@@ -25,10 +27,12 @@ describe('TAX ← MDM contracts (CT-02)', () => {
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
         const body = await client.getTaxAttributes();
-        expect(body.contractId).toBe('CT-02');
-        expect(body.producer).toBe('MDM');
-        expect(body.consumer).toBe('TAX');
-        expect(body.taxAttributes.filingType).toBe('1065');
+        expect(body.contractId).toBe(fixture.contractId);
+        expect(body.producer).toBe(fixture.producer);
+        expect(body.consumer).toBe(fixture.consumer);
+        expect(body.taxAttributes.filingType).toBe(
+          fixture.taxAttributes.filingType
+        );
         expect(body.taxAttributes.states.length).toBeGreaterThan(0);
       });
   });
@@ -38,20 +42,24 @@ describe('TAX ← MDM contracts (CT-02)', () => {
       .addInteraction()
       .given('MDM has downstream contracts to TAX')
       .uponReceiving('a TAX request for MDM downstream payloads to TAX')
-      .withRequest('GET', '/downstream/TAX', (builder) => {
+      .withRequest('GET', `/downstream/${fixture.consumer}`, (builder) => {
         builder.headers({ Accept: 'application/json' });
       })
       .willRespondWith(200, (builder) => {
         builder.headers({ 'Content-Type': 'application/json' });
         builder.jsonBody(
-          mdmDownstreamPeerBody('TAX', 'CT-02', ct02TaxAttributesBody())
+          mdmDownstreamPeerBody(
+            fixture.consumer,
+            fixture.contractId,
+            ct02TaxAttributesBody()
+          )
         );
       })
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
-        const edge = await client.getDownstream('TAX');
-        expect(edge.peer).toBe('TAX');
-        expect(edge.contracts[0].id).toBe('CT-02');
+        const edge = await client.getDownstream(fixture.consumer);
+        expect(edge.peer).toBe(fixture.consumer);
+        expect(edge.contracts[0].id).toBe(fixture.contractId);
       });
   });
 });

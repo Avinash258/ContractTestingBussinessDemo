@@ -1,0 +1,11 @@
+{
+  "contractId": "CT-11",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "taxSummary": {
+    "federalTaxableIncome": 1197000,
+    "stateApportionment": { "NY": 0.62, "CA": 0.38 },
+    "status": "computed",
+    "version": "TIM-2025.1"
+  }
+}

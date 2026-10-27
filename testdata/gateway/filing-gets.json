@@ -1,0 +1,11 @@
+{
+  "paths": [
+    "/api/filing",
+    "/api/filing/datasets",
+    "/api/filing/gates",
+    "/api/filing/jobs",
+    "/api/filing/form1065",
+    "/api/filing/validate/tax",
+    "/api/filing/validate/alc"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "contractId": "CT-06",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "bookBalances": [
+    {
+      "accountCode": "4000",
+      "accountName": "Ordinary Income",
+      "bookAmount": 1250000,
+      "currency": "USD"
+    },
+    {
+      "accountCode": "5000",
+      "accountName": "Guaranteed Payments",
+      "bookAmount": 80000,
+      "currency": "USD"
+    },
+    {
+      "accountCode": "1700",
+      "accountName": "Depreciation",
+      "bookAmount": -45000,
+      "currency": "USD"
+    }
+  ]
+}

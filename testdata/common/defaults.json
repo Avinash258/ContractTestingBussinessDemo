@@ -1,0 +1,14 @@
+{
+  "statusOk": "ok",
+  "isoTimestamp": "2025-10-26T10:00:00.000Z",
+  "directionDownstream": "downstream",
+  "directionUpstream": "upstream",
+  "flowDownstream": "downstream",
+  "flowUpstream": "upstream",
+  "formType1065": "1065",
+  "minTaxYear": 2000,
+  "httpOk": 200,
+  "httpBadRequest": 400,
+  "gatewayOk": "ok",
+  "filingStatusDraft": "draft"
+}

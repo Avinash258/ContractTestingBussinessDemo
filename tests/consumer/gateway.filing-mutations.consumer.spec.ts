@@ -2,8 +2,10 @@ import { createGatewayPact } from '../../src/pact/pactFactory';
 import { MatchersV3 } from '@pact-foundation/pact';
 import axios from 'axios';
 import { httpAgent, httpsAgent } from '../../src/clients/httpAgent';
+import { gateway } from '../../src/testdata';
 
 const { like, string } = MatchersV3;
+const filing = gateway.filing;
 
 async function postJson(baseUrl: string, path: string, body: unknown = {}) {
   const res = await axios.post(`${baseUrl.replace(/\/$/, '')}${path}`, body, {
@@ -22,6 +24,7 @@ async function postJson(baseUrl: string, path: string, body: unknown = {}) {
 
 /**
  * Swagger gap: Filing POST mutations (+ upload error contract without file).
+ * Example values from /testdata/gateway/filing-mutations.json.
  */
 describe('Gateway filing POST mutations (Swagger gap)', () => {
   it('POST /api/filing/reset', async () => {
@@ -36,19 +39,19 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
         });
         b.jsonBody(like({}));
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(filing.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
           like({
-            formType: string('1065'),
-            filingStatus: string('draft'),
+            formType: string(filing.formType),
+            filingStatus: string(filing.filingStatusDraft),
           })
         );
       })
       .executeTest(async ({ url }) => {
         const { status, data } = await postJson(url, '/api/filing/reset');
-        expect(status).toBe(200);
-        expect(data.filingStatus).toBe('draft');
+        expect(status).toBe(filing.httpOk);
+        expect(data.filingStatus).toBe(filing.filingStatusDraft);
       });
   });
 
@@ -64,23 +67,23 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
         });
         b.jsonBody(like({}));
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(filing.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
           like({
-            engagementId: string('ENG-2025-1065-001'),
-            formType: string('1065'),
+            engagementId: string(filing.engagementId),
+            formType: string(filing.formType),
           })
         );
       })
       .executeTest(async ({ url }) => {
         const { status, data } = await postJson(url, '/api/filing/run-all');
-        expect(status).toBe(200);
+        expect(status).toBe(filing.httpOk);
         expect(data.engagementId).toBeTruthy();
       });
   });
 
-  it.each(['cem', 'tax'] as const)(
+  it.each(filing.runSteps as string[])(
     'POST /api/filing/run/%s',
     async (stepId) => {
       await createGatewayPact()
@@ -94,13 +97,13 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
           });
           b.jsonBody(like({}));
         })
-        .willRespondWith(200, (b) => {
+        .willRespondWith(filing.httpOk, (b) => {
           b.headers({ 'Content-Type': 'application/json' });
-          b.jsonBody(like({ formType: string('1065') }));
+          b.jsonBody(like({ formType: string(filing.formType) }));
         })
         .executeTest(async ({ url }) => {
           const { status } = await postJson(url, `/api/filing/run/${stepId}`);
-          expect(status).toBe(200);
+          expect(status).toBe(filing.httpOk);
         });
     }
   );
@@ -117,13 +120,13 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
         });
         b.jsonBody(like({}));
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(filing.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(like({}));
       })
       .executeTest(async ({ url }) => {
         const { status } = await postJson(url, '/api/filing/tax/calculate');
-        expect(status).toBe(200);
+        expect(status).toBe(filing.httpOk);
       });
   });
 
@@ -139,17 +142,17 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
         });
         b.jsonBody(like({}));
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(filing.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(like({}));
       })
       .executeTest(async ({ url }) => {
         const { status } = await postJson(url, '/api/filing/alc/allocate');
-        expect(status).toBe(200);
+        expect(status).toBe(filing.httpOk);
       });
   });
 
-  it.each(['clm', 'mdm', 'acc'] as const)(
+  it.each(filing.uploadModules as string[])(
     'POST /api/filing/upload/%s without file → 400',
     async (module) => {
       await createGatewayPact()
@@ -159,7 +162,7 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
         .withRequest('POST', `/api/filing/upload/${module}`, (b) => {
           b.headers({ Accept: 'application/json' });
         })
-        .willRespondWith(400, (b) => {
+        .willRespondWith(filing.httpBadRequest, (b) => {
           b.headers({ 'Content-Type': 'application/json' });
           b.jsonBody(like({}));
         })
@@ -175,7 +178,7 @@ describe('Gateway filing POST mutations (Swagger gap)', () => {
               timeout: 15_000,
             }
           );
-          expect(res.status).toBe(400);
+          expect(res.status).toBe(filing.httpBadRequest);
         });
     }
   );

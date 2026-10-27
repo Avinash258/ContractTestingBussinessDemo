@@ -1,0 +1,12 @@
+{
+  "contractId": "CT-09",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "bttAsks": [
+    {
+      "accountCode": "1700",
+      "ask": "Provide tax depreciation schedule for book-to-tax",
+      "priority": "high"
+    }
+  ]
+}

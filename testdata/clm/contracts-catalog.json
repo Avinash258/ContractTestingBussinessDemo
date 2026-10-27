@@ -1,0 +1,17 @@
+{
+  "service": {
+    "id": "CLM",
+    "name": "Client Management",
+    "port": 4101
+  },
+  "produced": [
+    {
+      "id": "CT-00",
+      "producer": "CLM",
+      "consumer": "MDM",
+      "direction": "downstream",
+      "path": "/contracts/ct-00/engagement-context"
+    }
+  ],
+  "consumed": []
+}

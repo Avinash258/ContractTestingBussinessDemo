@@ -1,0 +1,6 @@
+{
+  "status": "ok",
+  "service": "mdm",
+  "produced": ["CT-01", "CT-02", "CT-03", "CT-04"],
+  "consumed": ["CT-00", "CT-05", "CT-08", "CT-12", "CT-15"]
+}

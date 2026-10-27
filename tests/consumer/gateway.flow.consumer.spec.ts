@@ -7,8 +7,10 @@ import { createGatewayPact } from '../../src/pact/pactFactory';
 import { createJsonClient, getJson } from '../../src/clients/httpJson';
 import { gatewayFlowPairBody } from '../../src/matchers/common';
 import { MatchersV3 } from '@pact-foundation/pact';
+import { gateway, testDefaults } from '../../src/testdata';
 
 const { like, string, eachLike, integer, boolean } = MatchersV3;
+const gw = gateway.health;
 
 /**
  * Gateway Data-flow APIs from Swagger:
@@ -29,19 +31,22 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
       .withRequest('GET', '/api/health', (b) => {
         b.headers({ Accept: 'application/json' });
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(testDefaults.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
           like({
-            gateway: string('ok'),
-            services: eachLike(like({ id: string('CLM'), healthy: boolean(true) }), 1),
+            gateway: string(gw.gateway),
+            services: eachLike(
+              like({ id: string(gw.sampleServiceId), healthy: boolean(true) }),
+              1
+            ),
           })
         );
       })
       .executeTest(async ({ url }) => {
         const { status, data } = await getJson(createJsonClient(url), '/api/health');
-        expect(status).toBe(200);
-        expect(data.gateway).toBe('ok');
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.gateway).toBe(gw.gateway);
       });
   });
 
@@ -53,11 +58,11 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
       .withRequest('GET', '/api/architecture', (b) => {
         b.headers({ Accept: 'application/json' });
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(testDefaults.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
           like({
-            services: eachLike(like({ id: string('CLM') }), 1),
+            services: eachLike(like({ id: string(gw.sampleServiceId) }), 1),
           })
         );
       })
@@ -66,7 +71,7 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
           createJsonClient(url),
           '/api/architecture'
         );
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         expect(Array.isArray(data.services)).toBe(true);
       });
   });
@@ -79,7 +84,7 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
       .withRequest('GET', '/api/contracts', (b) => {
         b.headers({ Accept: 'application/json' });
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(testDefaults.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
           like({
@@ -92,7 +97,7 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
           createJsonClient(url),
           '/api/contracts'
         );
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         const list = data.contracts || data;
         expect(Array.isArray(list) || typeof data === 'object').toBe(true);
       });
@@ -106,13 +111,13 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
       .withRequest('GET', '/api/flow', (b) => {
         b.headers({ Accept: 'application/json' });
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(testDefaults.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(like({}));
       })
       .executeTest(async ({ url }) => {
         const { status, data } = await getJson(createJsonClient(url), '/api/flow');
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         expect(data).toBeTruthy();
       });
   });
@@ -125,12 +130,18 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
       .withRequest('GET', '/api/flow/edges', (b) => {
         b.headers({ Accept: 'application/json' });
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(testDefaults.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
           like({
             count: integer(1),
-            edges: eachLike(like({ from: string('CLM'), to: string('MDM') }), 1),
+            edges: eachLike(
+              like({
+                from: string(gw.sampleEdge.from),
+                to: string(gw.sampleEdge.to),
+              }),
+              1
+            ),
           })
         );
       })
@@ -139,7 +150,7 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
           createJsonClient(url),
           '/api/flow/edges'
         );
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         expect(data.count).toBeGreaterThan(0);
       });
   });
@@ -168,10 +179,15 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
             b.headers({ Accept: 'application/json' });
           }
         )
-        .willRespondWith(200, (b) => {
+        .willRespondWith(testDefaults.httpOk, (b) => {
           b.headers({ 'Content-Type': 'application/json' });
           b.jsonBody(
-            gatewayFlowPairBody(pair.from, pair.to, 'downstream', ct.id)
+            gatewayFlowPairBody(
+              pair.from,
+              pair.to,
+              testDefaults.flowDownstream as 'downstream',
+              ct.id
+            )
           );
         })
         .executeTest(async ({ url }) => {
@@ -179,10 +195,10 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
             createJsonClient(url),
             `/api/flow/downstream/${pair.from}/${pair.to}`
           );
-          expect(status).toBe(200);
+          expect(status).toBe(testDefaults.httpOk);
           expect(data.from).toBe(pair.from);
           expect(data.to).toBe(pair.to);
-          expect(data.flow).toBe('downstream');
+          expect(data.flow).toBe(testDefaults.flowDownstream);
           expect(data.contracts[0].id).toBe(ct.id);
         });
     }
@@ -212,10 +228,15 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
             b.headers({ Accept: 'application/json' });
           }
         )
-        .willRespondWith(200, (b) => {
+        .willRespondWith(testDefaults.httpOk, (b) => {
           b.headers({ 'Content-Type': 'application/json' });
           b.jsonBody(
-            gatewayFlowPairBody(pair.from, pair.to, 'upstream', ct.id)
+            gatewayFlowPairBody(
+              pair.from,
+              pair.to,
+              testDefaults.flowUpstream as 'upstream',
+              ct.id
+            )
           );
         })
         .executeTest(async ({ url }) => {
@@ -223,27 +244,17 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
             createJsonClient(url),
             `/api/flow/upstream/${pair.from}/${pair.to}`
           );
-          expect(status).toBe(200);
+          expect(status).toBe(testDefaults.httpOk);
           expect(data.from).toBe(pair.from);
           expect(data.to).toBe(pair.to);
-          expect(data.flow).toBe('upstream');
+          expect(data.flow).toBe(testDefaults.flowUpstream);
           expect(data.contracts[0].id).toBe(ct.id);
         });
     }
   );
 
   // Filing GET surface (Swagger Filing — Form 1065)
-  const filingGets = [
-    '/api/filing',
-    '/api/filing/datasets',
-    '/api/filing/gates',
-    '/api/filing/jobs',
-    '/api/filing/form1065',
-    '/api/filing/validate/tax',
-    '/api/filing/validate/alc',
-  ];
-
-  it.each(filingGets)('GET %s', async (path) => {
+  it.each(gateway.filingGets.paths as string[])('GET %s', async (path) => {
     await createGatewayPact()
       .addInteraction()
       .given(`filing endpoint ${path} is available`)
@@ -251,13 +262,13 @@ describe('TaxMesh Gateway (Swagger Data flow + catalog)', () => {
       .withRequest('GET', path, (b) => {
         b.headers({ Accept: 'application/json' });
       })
-      .willRespondWith(200, (b) => {
+      .willRespondWith(testDefaults.httpOk, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(like({}));
       })
       .executeTest(async ({ url }) => {
         const { status } = await getJson(createJsonClient(url), path);
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
       });
   });
 });

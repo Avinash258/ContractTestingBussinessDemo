@@ -1,0 +1,23 @@
+{
+  "contractId": "CT-14",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "partnerAllocations": [
+    {
+      "partnerId": "P-001",
+      "k1": {
+        "ordinaryIncome": 708000,
+        "interestIncome": 7200,
+        "endingCapital": 658000
+      }
+    },
+    {
+      "partnerId": "P-002",
+      "k1": {
+        "ordinaryIncome": 472000,
+        "interestIncome": 4800,
+        "endingCapital": 401000
+      }
+    }
+  ]
+}

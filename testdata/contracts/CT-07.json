@@ -1,0 +1,21 @@
+{
+  "contractId": "CT-07",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "capitalMap": [
+    {
+      "partnerId": "P-001",
+      "capitalAccount": "CA-001",
+      "beginningCapital": 500000,
+      "contributions": 0,
+      "distributions": 50000
+    },
+    {
+      "partnerId": "P-002",
+      "capitalAccount": "CA-002",
+      "beginningCapital": 320000,
+      "contributions": 25000,
+      "distributions": 20000
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "contractId": "CT-05",
+  "engagementId": "ENG-2025-1065-001",
+  "gaps": [
+    {
+      "code": "MISSING_ENTITY",
+      "accountCode": "1700",
+      "message": "No master entity for intercompany account 1700"
+    }
+  ]
+}

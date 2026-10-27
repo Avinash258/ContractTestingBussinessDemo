@@ -5,10 +5,12 @@ import {
   ct03OwnershipBody,
   mdmDownstreamPeerBody,
 } from '../../src/matchers/mdm';
+import { ct03OwnershipFixture } from '../../src/fixtures/mdm';
 
 describe('ALC ← MDM contracts (CT-03)', () => {
   const ct = config.mdm.contracts.ct03;
   const pact = createMdmPact(ct.consumer);
+  const fixture = ct03OwnershipFixture;
 
   it('GET /contracts/ct-03/ownership — partner ownership', async () => {
     await pact
@@ -25,9 +27,9 @@ describe('ALC ← MDM contracts (CT-03)', () => {
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
         const body = await client.getOwnership();
-        expect(body.contractId).toBe('CT-03');
-        expect(body.producer).toBe('MDM');
-        expect(body.consumer).toBe('ALC');
+        expect(body.contractId).toBe(fixture.contractId);
+        expect(body.producer).toBe(fixture.producer);
+        expect(body.consumer).toBe(fixture.consumer);
         expect(body.partners.length).toBeGreaterThan(0);
         expect(body.partners[0].partnerId).toBeTruthy();
         expect(typeof body.partners[0].ownershipPct).toBe('number');
@@ -39,20 +41,24 @@ describe('ALC ← MDM contracts (CT-03)', () => {
       .addInteraction()
       .given('MDM has downstream contracts to ALC')
       .uponReceiving('an ALC request for MDM downstream payloads to ALC')
-      .withRequest('GET', '/downstream/ALC', (builder) => {
+      .withRequest('GET', `/downstream/${fixture.consumer}`, (builder) => {
         builder.headers({ Accept: 'application/json' });
       })
       .willRespondWith(200, (builder) => {
         builder.headers({ 'Content-Type': 'application/json' });
         builder.jsonBody(
-          mdmDownstreamPeerBody('ALC', 'CT-03', ct03OwnershipBody())
+          mdmDownstreamPeerBody(
+            fixture.consumer,
+            fixture.contractId,
+            ct03OwnershipBody()
+          )
         );
       })
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
-        const edge = await client.getDownstream('ALC');
-        expect(edge.peer).toBe('ALC');
-        expect(edge.contracts[0].id).toBe('CT-03');
+        const edge = await client.getDownstream(fixture.consumer);
+        expect(edge.peer).toBe(fixture.consumer);
+        expect(edge.contracts[0].id).toBe(fixture.contractId);
       });
   });
 });

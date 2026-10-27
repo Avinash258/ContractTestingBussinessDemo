@@ -1,0 +1,9 @@
+{
+  "filingStatusDraft": "draft",
+  "formType": "1065",
+  "engagementId": "ENG-2025-1065-001",
+  "uploadModules": ["clm", "mdm", "acc"],
+  "runSteps": ["cem", "tax"],
+  "httpOk": 200,
+  "httpBadRequest": 400
+}

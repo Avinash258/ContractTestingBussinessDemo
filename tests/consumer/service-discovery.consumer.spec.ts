@@ -7,8 +7,10 @@ import { createServicePairPact } from '../../src/pact/pactFactory';
 import { createJsonClient, getJson } from '../../src/clients/httpJson';
 import { healthBody, contractsCatalogBody } from '../../src/matchers/common';
 import { MatchersV3 } from '@pact-foundation/pact';
+import { clm, testDefaults } from '../../src/testdata';
 
 const { like, string } = MatchersV3;
+const fallbackContractId = clm.engagementContext.contractId;
 
 /**
  * Per-service discovery APIs exposed via /api/proxy/{svc}/… in Swagger:
@@ -37,13 +39,16 @@ describe('TaxMesh service discovery APIs', () => {
       .willRespondWith(200, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
-          healthBody(SERVICES[producer].key, produced[0]?.id ?? 'CT-00')
+          healthBody(
+            SERVICES[producer].key,
+            produced[0]?.id ?? fallbackContractId
+          )
         );
       })
       .executeTest(async ({ url }) => {
         const { status, data } = await getJson(createJsonClient(url), '/health');
-        expect(status).toBe(200);
-        expect(data.status).toBe('ok');
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.status).toBe(testDefaults.statusOk);
       });
   });
 
@@ -60,7 +65,10 @@ describe('TaxMesh service discovery APIs', () => {
       .willRespondWith(200, (b) => {
         b.headers({ 'Content-Type': 'application/json' });
         b.jsonBody(
-          contractsCatalogBody(producer, produced[0]?.id ?? 'CT-00')
+          contractsCatalogBody(
+            producer,
+            produced[0]?.id ?? fallbackContractId
+          )
         );
       })
       .executeTest(async ({ url }) => {
@@ -68,7 +76,7 @@ describe('TaxMesh service discovery APIs', () => {
           createJsonClient(url),
           '/contracts'
         );
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         expect(data.service.id).toBe(producer);
       });
   });
@@ -88,7 +96,7 @@ describe('TaxMesh service discovery APIs', () => {
       })
       .executeTest(async ({ url }) => {
         const { status, data } = await getJson(createJsonClient(url), '/flow');
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         expect(data.service).toBe(producer);
       });
   });
@@ -107,7 +115,7 @@ describe('TaxMesh service discovery APIs', () => {
         b.jsonBody(
           like({
             service: string(producer),
-            flow: string('downstream'),
+            flow: string(testDefaults.flowDownstream),
           })
         );
       })
@@ -116,8 +124,8 @@ describe('TaxMesh service discovery APIs', () => {
           createJsonClient(url),
           '/contracts/downstream'
         );
-        expect(status).toBe(200);
-        expect(data.flow).toBe('downstream');
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.flow).toBe(testDefaults.flowDownstream);
       });
   });
 
@@ -135,7 +143,7 @@ describe('TaxMesh service discovery APIs', () => {
         b.jsonBody(
           like({
             service: string(producer),
-            flow: string('upstream'),
+            flow: string(testDefaults.flowUpstream),
           })
         );
       })
@@ -144,8 +152,8 @@ describe('TaxMesh service discovery APIs', () => {
           createJsonClient(url),
           '/contracts/upstream'
         );
-        expect(status).toBe(200);
-        expect(data.flow).toBe('upstream');
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.flow).toBe(testDefaults.flowUpstream);
       });
   });
 
@@ -167,7 +175,7 @@ describe('TaxMesh service discovery APIs', () => {
           createJsonClient(url),
           '/pipeline'
         );
-        expect(status).toBe(200);
+        expect(status).toBe(testDefaults.httpOk);
         expect(data.service).toBe(producer);
       });
   });
@@ -186,7 +194,7 @@ describe('TaxMesh service discovery APIs', () => {
         b.jsonBody(
           like({
             service: string(producer),
-            flow: string('downstream'),
+            flow: string(testDefaults.flowDownstream),
           })
         );
       })
@@ -195,8 +203,8 @@ describe('TaxMesh service discovery APIs', () => {
           createJsonClient(url),
           '/consume/downstream'
         );
-        expect(status).toBe(200);
-        expect(data.flow).toBe('downstream');
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.flow).toBe(testDefaults.flowDownstream);
       });
   });
 
@@ -214,7 +222,7 @@ describe('TaxMesh service discovery APIs', () => {
         b.jsonBody(
           like({
             service: string(producer),
-            flow: string('upstream'),
+            flow: string(testDefaults.flowUpstream),
           })
         );
       })
@@ -223,8 +231,8 @@ describe('TaxMesh service discovery APIs', () => {
           createJsonClient(url),
           '/consume/upstream'
         );
-        expect(status).toBe(200);
-        expect(data.flow).toBe('upstream');
+        expect(status).toBe(testDefaults.httpOk);
+        expect(data.flow).toBe(testDefaults.flowUpstream);
       });
   });
 });

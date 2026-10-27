@@ -1,0 +1,9 @@
+{
+  "contractId": "CT-15",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "printNeeds": [
+    { "field": "legalName", "required": true },
+    { "field": "ein", "required": true }
+  ]
+}

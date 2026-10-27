@@ -1,0 +1,17 @@
+{
+  "contractId": "CT-02",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "taxAttributes": {
+    "filingType": "1065",
+    "fiscalYearEnd": "12-31",
+    "multiState": true,
+    "states": ["NY", "CA"],
+    "section754Election": true
+  },
+  "consumer": "TAX",
+  "producer": "MDM",
+  "direction": "downstream",
+  "flow": "downstream",
+  "producedAt": "2025-10-26T10:00:00.000Z"
+}

@@ -1,0 +1,11 @@
+{
+  "contractId": "CT-00",
+  "engagementId": "ENG-2025-1065-001",
+  "clientId": "CLI-NV-TAX-01",
+  "projectId": "PRJ-ALPHA-1065-2025",
+  "entityGroupId": "EG-ALPHA",
+  "jobId": "JOB-TY2025-001",
+  "taxYear": 2025,
+  "formType": "1065",
+  "dueDate": "2026-03-15"
+}

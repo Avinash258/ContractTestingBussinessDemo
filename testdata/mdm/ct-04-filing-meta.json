@@ -1,0 +1,16 @@
+{
+  "contractId": "CT-04",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "filingMeta": {
+    "formSet": ["1065", "K-1", "K-3"],
+    "jurisdiction": "US-FED",
+    "printPackageId": null,
+    "dueDate": "2026-03-15"
+  },
+  "consumer": "DOC",
+  "producer": "MDM",
+  "direction": "downstream",
+  "flow": "downstream",
+  "producedAt": "2025-10-26T10:00:00.000Z"
+}

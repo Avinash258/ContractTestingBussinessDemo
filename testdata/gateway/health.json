@@ -1,0 +1,8 @@
+{
+  "gateway": "ok",
+  "sampleServiceId": "CLM",
+  "sampleEdge": {
+    "from": "CLM",
+    "to": "MDM"
+  }
+}

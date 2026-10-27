@@ -6,10 +6,15 @@ import {
   mdmDownstreamPeerBody,
   mdmHealthBody,
 } from '../../src/matchers/mdm';
+import {
+  ct01EntitiesFixture,
+  mdmHealthFixture,
+} from '../../src/fixtures/mdm';
 
 describe('ACC ← MDM contracts (CT-01)', () => {
   const ct = config.mdm.contracts.ct01;
   const pact = createMdmPact(ct.consumer);
+  const fixture = ct01EntitiesFixture;
 
   it('GET /health — MDM is live and produces CT-01…CT-04', async () => {
     await pact
@@ -26,8 +31,8 @@ describe('ACC ← MDM contracts (CT-01)', () => {
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
         const health = await client.getHealth();
-        expect(health.status).toBe('ok');
-        expect(health.produced).toContain('CT-01');
+        expect(health.status).toBe(mdmHealthFixture.status);
+        expect(health.produced).toContain(mdmHealthFixture.produced[0]);
       });
   });
 
@@ -46,9 +51,9 @@ describe('ACC ← MDM contracts (CT-01)', () => {
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
         const body = await client.getEntities();
-        expect(body.contractId).toBe('CT-01');
-        expect(body.producer).toBe('MDM');
-        expect(body.consumer).toBe('ACC');
+        expect(body.contractId).toBe(fixture.contractId);
+        expect(body.producer).toBe(fixture.producer);
+        expect(body.consumer).toBe(fixture.consumer);
         expect(body.entities.length).toBeGreaterThan(0);
         expect(body.entities[0].entityId).toBeTruthy();
         expect(body.entities[0].ein).toBeTruthy();
@@ -60,21 +65,25 @@ describe('ACC ← MDM contracts (CT-01)', () => {
       .addInteraction()
       .given('MDM has downstream contracts to ACC')
       .uponReceiving('an ACC request for MDM downstream payloads to ACC')
-      .withRequest('GET', '/downstream/ACC', (builder) => {
+      .withRequest('GET', `/downstream/${fixture.consumer}`, (builder) => {
         builder.headers({ Accept: 'application/json' });
       })
       .willRespondWith(200, (builder) => {
         builder.headers({ 'Content-Type': 'application/json' });
         builder.jsonBody(
-          mdmDownstreamPeerBody('ACC', 'CT-01', ct01EntitiesBody())
+          mdmDownstreamPeerBody(
+            fixture.consumer,
+            fixture.contractId,
+            ct01EntitiesBody()
+          )
         );
       })
       .executeTest(async (mockServer) => {
         const client = new MdmClient(mockServer.url);
-        const edge = await client.getDownstream('ACC');
-        expect(edge.service).toBe('MDM');
-        expect(edge.peer).toBe('ACC');
-        expect(edge.contracts[0].id).toBe('CT-01');
+        const edge = await client.getDownstream(fixture.consumer);
+        expect(edge.service).toBe(fixture.producer);
+        expect(edge.peer).toBe(fixture.consumer);
+        expect(edge.contracts[0].id).toBe(fixture.contractId);
       });
   });
 });

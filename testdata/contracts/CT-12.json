@@ -1,0 +1,12 @@
+{
+  "contractId": "CT-12",
+  "engagementId": "ENG-2025-1065-001",
+  "entityId": "ENT-ALPHA-LP",
+  "ownershipIssues": [
+    {
+      "partnerId": "P-002",
+      "issue": "Ownership % drift vs capital ratio",
+      "suggestedOwnershipPct": 40
+    }
+  ]
+}

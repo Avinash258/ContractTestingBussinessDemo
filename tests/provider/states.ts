@@ -27,6 +27,13 @@ export function buildStateHandlers(): Record<string, () => Promise<void>> {
     'MDM has downstream contracts to ALC': noop,
     'MDM has filing metadata for DOC': noop,
     'MDM has downstream contracts to DOC': noop,
+    'MDM has entity E-100': noop,
+    'MDM has ownership for E-100': noop,
+    'MDM does not have entity E-999': noop,
+    'MDM has partners list': noop,
+    'MDM has v2 status active': noop,
+    'CLM has engagement ENG-200': noop,
+    'CLM v2 status is healthy': noop,
   };
 
   for (const ct of CONTRACTS) {

@@ -1,0 +1,7 @@
+{
+  "id": "E-100",
+  "ownership": [
+    { "partnerId": "P-001", "share": 60.0, "role": "Majority" },
+    { "partnerId": "P-002", "share": 40.0, "role": "Minority" }
+  ]
+}

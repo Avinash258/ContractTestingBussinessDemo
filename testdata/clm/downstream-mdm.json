@@ -1,0 +1,12 @@
+{
+  "service": "CLM",
+  "peer": "MDM",
+  "flow": "downstream",
+  "contracts": [
+    {
+      "id": "CT-00",
+      "producer": "CLM",
+      "consumer": "MDM"
+    }
+  ]
+}
