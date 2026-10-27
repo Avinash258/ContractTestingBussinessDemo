@@ -1,0 +1,6 @@
+{
+  "partners": [
+    { "id": "P-001", "name": "Partner A", "type": "Equity" },
+    { "id": "P-002", "name": "Partner B", "type": "Equity" }
+  ]
+}
