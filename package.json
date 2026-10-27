@@ -25,6 +25,8 @@
     "test:contract:clm-mdm:full-consumer": "ts-node --transpile-only scripts/run-contract-ci.ts --full-consumer --services=CLM,MDM",
     "test:swagger-coverage": "ts-node --transpile-only scripts/verify-swagger-coverage.ts",
     "test:swagger-coverage:ci": "ts-node --transpile-only scripts/verify-swagger-coverage.ts --fail-on-gap --write-doc",
+    "sync:gateway": "node scripts/sync-gateway-url.js",
+    "gateway:url": "node scripts/resolve-gateway-url.js",
     "send-report": "ts-node --transpile-only scripts/send-report.ts",
     "report:refresh": "ts-node --transpile-only scripts/refresh-reports-from-json.ts",
     "report:open": "node -e \"console.log(require('path').resolve('reports/pact-report.html'))\""

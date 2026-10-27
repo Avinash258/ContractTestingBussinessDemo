@@ -1,32 +1,30 @@
 import path from 'path';
 import { GATEWAY_PACT, SERVICES, type ServiceId } from './catalog/contracts';
+import { resolveGatewayBaseUrl } from './gatewayConfig';
 
 /**
- * TaxMesh Pact config â€” full CT-00â€¦CT-17 + gateway data-flow coverage.
+ * TaxMesh Pact config — full CT-00…CT-17 + gateway data-flow coverage.
+ * Live gateway URL: edit gateway.config.json (then npm run sync:gateway).
  */
 export const config = {
   pactsDir: path.resolve(process.cwd(), 'pacts'),
   logDir: path.resolve(process.cwd(), 'logs'),
 
-  gatewayBaseUrl:
-    (
-      process.env.GATEWAY_BASE_URL ||
-      process.env.TAXMESH_BASE_URL ||
-      process.env.PACT_PROVIDER_URL ||
-      'http://127.0.0.1:4100'
-    ).replace(/\/$/, ''),
+  get gatewayBaseUrl() {
+    return resolveGatewayBaseUrl();
+  },
 
   gatewayPact: GATEWAY_PACT,
 
   /**
    * Per-service provider base URL (Swagger /api-docs).
    * Gateway catalog: GET {GATEWAY}/api/contracts  (operationId: listContracts)
-   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/â€¦
-   * @see https://pubmed-physiology-speaks-bibliographic.trycloudflare.com/api-docs#/Gateway/listContracts
+   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/…
+   * @see https://marco-absolute-map-mailto.trycloudflare.com/api-docs#/Gateway/listContracts
    *
    * - URL_CLM / CLM_BASE_URL etc. win when set
-   * - Else if GATEWAY_BASE_URL is set â†’ `{GATEWAY}/api/proxy/{SERVICE_ID}` (uppercase, Swagger)
-   * - Else local direct ports 4101â€“4106
+   * - Else if GATEWAY_* env set ? `{GATEWAY}/api/proxy/{SERVICE_ID}`
+   * - Else local direct ports 4101–4106 (tunnel from gateway.config.json is for CI/Swagger)
    */
   serviceBaseUrl(serviceId: ServiceId): string {
     const envKey = `URL_${serviceId}`;
@@ -34,21 +32,20 @@ export const config = {
     const explicit = process.env[envKey] || process.env[alt];
     if (explicit) return explicit.replace(/\/$/, '');
 
-    const gateway =
+    const hasGatewayEnv = Boolean(
       process.env.GATEWAY_BASE_URL ||
-      process.env.TAXMESH_BASE_URL ||
-      process.env.PACT_PROVIDER_URL;
+        process.env.TAXMESH_BASE_URL ||
+        process.env.PACT_PROVIDER_URL
+    );
 
-    if (gateway) {
-      const base = gateway.replace(/\/$/, '');
-      // Swagger paths use uppercase service ids: /api/proxy/CLM/health
-      return `${base}/api/proxy/${serviceId}`;
+    if (hasGatewayEnv) {
+      return `${resolveGatewayBaseUrl()}/api/proxy/${serviceId}`;
     }
 
     return `http://127.0.0.1:${SERVICES[serviceId].port}`;
   },
 
-  // Back-compat for earlier CLMâ†”MDM helpers
+  // Back-compat for earlier CLM?MDM helpers
   get clmBaseUrl() {
     return this.serviceBaseUrl('CLM');
   },

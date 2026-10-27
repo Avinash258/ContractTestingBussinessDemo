@@ -1,7 +1,9 @@
 # TaxMesh Pact Framework (TypeScript) — full Swagger coverage
 
+**Gateway URL (single source of truth):** edit [`gateway.config.json`](gateway.config.json), then run `npm run sync:gateway`.
+
 Consumer-driven contracts for TaxMesh aligned with  
-`https://…trycloudflare.com/api-docs` / local gateway `:4100`.
+`https://marco-absolute-map-mailto.trycloudflare.com/api-docs` / local gateway `:4100`.
 
 ## Coverage
 
@@ -71,7 +73,8 @@ Reports land in `reports/pact-report.html` and `reports/latest.json` (service ma
 
 | Variable | Secret? | Purpose |
 |----------|---------|---------|
-| `GATEWAY_BASE_URL` | no | TaxMesh gateway (required for provider job) |
+| *(file)* `gateway.config.json` | no | **Preferred** — single source of truth; pipeline reads it automatically |
+| Run-pipeline override `gatewayBaseUrl` | no | Optional one-off; leave blank to use the file |
 | `URL_CLM` … `URL_DOC` | no | Direct service bases if not on same host |
 | `SMTP_USER` | no | Default in YAML: `avinashazureemail@gmail.com` (override OK) |
 | `SMTP_PASS` | **yes** | Gmail **App Password** (16 chars) — never commit; pipeline secret only |

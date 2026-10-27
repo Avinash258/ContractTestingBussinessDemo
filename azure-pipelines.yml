@@ -1,18 +1,20 @@
 # CI/CD: Pact contract tests gate (TaxMesh)
 # Pattern reference: EY_Demo ContractTestDemo-Pact (build 260)
-# Swagger (live): https://pubmed-physiology-speaks-bibliographic.trycloudflare.com/api-docs
-#   Gateway listContracts → GET {TARGET}/api/contracts
-#   Service proxy         → GET {TARGET}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/…
+# Gateway URL source of truth: gateway.config.json  (npm run sync:gateway)
+# Swagger (live): https://marco-absolute-map-mailto.trycloudflare.com/api-docs
+#   Gateway listContracts ? GET {TARGET}/api/contracts
+#   Service proxy         ? GET {TARGET}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/?
 # Project: https://dev.azure.com/InnoVisionDA/ContractTesting
 #
-# Run pipeline UI — paste gateway origin only (no /api-docs path). Override when tunnel rotates.
+# Change tunnel: edit gateway.config.json ? npm run sync:gateway ? commit.
+# Run pipeline UI: leave override blank to use gateway.config.json, or paste a one-off origin.
 # Required secret variable: SMTP_PASS = Gmail App Password for SMTP_USER below.
 
 parameters:
   - name: gatewayBaseUrl
-    displayName: 'TaxMesh gateway origin (from api-docs server URL, no trailing path)'
+    displayName: 'Override gateway URL (blank = gateway.config.json)'
     type: string
-    default: 'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
+    default: ''
 
   - name: services
     displayName: 'Services to run (CLM,MDM | all | comma list)'
@@ -47,10 +49,8 @@ pool:
 variables:
   NODE_VERSION: '22.x'
   PACT_DO_NOT_TRACK: 'true'
-  # EY_Demo-style: put target URL in YAML variables (auto-injected into scripts)
-  GATEWAY_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-  TAXMESH_BASE_URL: ${{ parameters.gatewayBaseUrl }}
-  PACT_PROVIDER_URL: ${{ parameters.gatewayBaseUrl }}
+  # Optional one-off override from Run pipeline UI; blank ? gateway.config.json
+  GATEWAY_BASE_URL_OVERRIDE: ${{ parameters.gatewayBaseUrl }}
   PACT_SERVICES: ${{ parameters.services }}
   REPORT_EMAIL_TO: ${{ parameters.reportEmailTo }}
   # Sender = Gmail (pinned). Only SMTP_PASS comes from a secret pipeline variable.
@@ -64,13 +64,13 @@ stages:
     displayName: 'Pact Contract Tests'
     jobs:
       - job: ConsumerContracts
-        displayName: 'Consumer — generate pact files (${{ parameters.services }})'
+        displayName: 'Consumer ? generate pact files (${{ parameters.services }})'
         steps:
           - checkout: self
             fetchDepth: 0
             clean: true
 
-          # Manual "Run pipeline" often sticks a stale Commit SHA — move to branch tip.
+          # Manual "Run pipeline" often sticks a stale Commit SHA ? move to branch tip.
           # Skip on PRs so we keep the PR merge commit.
           - script: |
               set -euo pipefail
@@ -81,7 +81,7 @@ stages:
               echo "Syncing workspace to latest origin/${BRANCH} (was $(git rev-parse --short HEAD))"
               git fetch origin "${BRANCH}"
               git checkout -B "${BRANCH}" "origin/${BRANCH}"
-              echo "HEAD is now $(git rev-parse HEAD) — $(git log -1 --oneline)"
+              echo "HEAD is now $(git rev-parse HEAD) ? $(git log -1 --oneline)"
             displayName: 'Use latest commit on branch'
             condition: ne(variables['Build.Reason'], 'PullRequest')
 
@@ -92,6 +92,13 @@ stages:
 
           - script: npm ci
             displayName: 'Install dependencies'
+
+          - script: |
+              set -euo pipefail
+              node scripts/resolve-gateway-url.js --ado
+            displayName: 'Resolve gateway URL (gateway.config.json)'
+            env:
+              GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
 
           - script: |
               set -euo pipefail
@@ -112,7 +119,7 @@ stages:
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               echo "Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
               npm run test:swagger-coverage:ci
-            displayName: 'Swagger coverage gate (OpenAPI ↔ Pact)'
+            displayName: 'Swagger coverage gate (OpenAPI ? Pact)'
             condition: and(succeeded(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
             env:
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
@@ -133,7 +140,7 @@ stages:
             condition: succeededOrFailed()
 
       - job: ProviderVerification
-        displayName: 'Provider — verify API (${{ parameters.services }})'
+        displayName: 'Provider ? verify API (${{ parameters.services }})'
         dependsOn: ConsumerContracts
         condition: succeeded()
         steps:
@@ -150,7 +157,7 @@ stages:
               echo "Syncing workspace to latest origin/${BRANCH} (was $(git rev-parse --short HEAD))"
               git fetch origin "${BRANCH}"
               git checkout -B "${BRANCH}" "origin/${BRANCH}"
-              echo "HEAD is now $(git rev-parse HEAD) — $(git log -1 --oneline)"
+              echo "HEAD is now $(git rev-parse HEAD) ? $(git log -1 --oneline)"
             displayName: 'Use latest commit on branch'
             condition: ne(variables['Build.Reason'], 'PullRequest')
 
@@ -161,6 +168,13 @@ stages:
 
           - script: npm ci
             displayName: 'Install dependencies'
+
+          - script: |
+              set -euo pipefail
+              node scripts/resolve-gateway-url.js --ado
+            displayName: 'Resolve gateway URL (gateway.config.json)'
+            env:
+              GATEWAY_BASE_URL_OVERRIDE: $(GATEWAY_BASE_URL_OVERRIDE)
 
           - download: current
             artifact: pact-files
@@ -181,7 +195,7 @@ stages:
               set -euo pipefail
               GATEWAY="${GATEWAY_BASE_URL:-${PACT_PROVIDER_URL:-${TAXMESH_BASE_URL:-}}}"
               GATEWAY="${GATEWAY%/}"
-              # Allow pasting a full api-docs URL by mistake — strip to origin
+              # Allow pasting a full api-docs URL by mistake ? strip to origin
               GATEWAY="${GATEWAY%%/api-docs*}"
               GATEWAY="${GATEWAY%/}"
               SERVICES="${PACT_SERVICES:-CLM,MDM}"
@@ -189,7 +203,7 @@ stages:
               echo "  Scope         : $SERVICES"
               echo "  GET $GATEWAY/api/health          (getGatewayHealth)"
               if [ -z "$GATEWAY" ]; then
-                echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is empty. Set Run pipeline → TaxMesh gateway origin."
+                echo "##vso[task.logissue type=error]GATEWAY_BASE_URL is empty. Set Run pipeline ? TaxMesh gateway origin."
                 exit 1
               fi
               curl -sf --retry 8 --retry-delay 3 --connect-timeout 15 \
@@ -206,7 +220,7 @@ stages:
                   "${GATEWAY}/api/proxy/${svc}/health" | head -c 400
                 echo
               done
-            displayName: 'Health check — gateway + scoped services'
+            displayName: 'Health check ? gateway + scoped services'
             env:
               GATEWAY_BASE_URL: $(GATEWAY_BASE_URL)
               PACT_SERVICES: $(PACT_SERVICES)
@@ -240,7 +254,7 @@ stages:
           - script: |
               set -euo pipefail
               if [ -z "${SMTP_PASS:-}" ]; then
-                echo "SMTP_PASS not set — skipping email report. Add secret variable SMTP_PASS = Gmail App Password."
+                echo "SMTP_PASS not set ? skipping email report. Add secret variable SMTP_PASS = Gmail App Password."
                 exit 0
               fi
               # Collapse empty entries from pasted "a,,b" recipient lists

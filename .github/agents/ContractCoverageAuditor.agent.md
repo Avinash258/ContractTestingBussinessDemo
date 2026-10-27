@@ -3,11 +3,11 @@ name: ContractCoverageAuditor
 description: >-
   Read-only audit of TaxMesh Pact coverage vs OpenAPI/Swagger. Reports covered,
   partial, missing, and deferred operations. Use when the user asks for a
-  coverage report, what’s missing, or whether tests are aligned with Swagger —
+  coverage report, what�s missing, or whether tests are aligned with Swagger �
   without generating new tests unless explicitly asked.
 argument-hint: >-
   Optional OpenAPI URL (default TaxMesh tunnel or http://127.0.0.1:4100) and
-  optional scope (e.g. "gateway only", "CT-00…CT-04", "filing")
+  optional scope (e.g. "gateway only", "CT-00�CT-04", "filing")
 ---
 
 # Contract Coverage Auditor
@@ -18,54 +18,56 @@ asks you to hand off to `TestCaseGenratorViaSwagger` or another authoring agent.
 
 ## When to activate
 
-- “coverage report”, “what’s missing?”, “aligned with Swagger?”
+- �coverage report�, �what�s missing?�, �aligned with Swagger?�
 - Before a release / demo of contract-test completeness
-- After someone claims “full coverage”
+- After someone claims �full coverage�
 
 ## Default Swagger targets
 
+> Live host comes from [`gateway.config.json`](../../gateway.config.json) — run `npm run sync:gateway` after changing it.
+
 | Surface | URL |
 |---------|-----|
-| OpenAPI JSON | `https://pubmed-physiology-speaks-bibliographic.trycloudflare.com/openapi.json` |
+| OpenAPI JSON | `https://marco-absolute-map-mailto.trycloudflare.com/openapi.json` |
 | Local | `http://127.0.0.1:4100/openapi.json` |
 
 ## Hard rules
 
-### R1 — Read-only by default
+### R1 � Read-only by default
 - Diff and report only.
-- Do not edit `tests/consumer/**`, matchers, or pacts unless user says “fix/generate”.
+- Do not edit `tests/consumer/**`, matchers, or pacts unless user says �fix/generate�.
 - You **may** refresh [`docs/SWAGGER_GAP_COVERAGE.md`](../../docs/SWAGGER_GAP_COVERAGE.md) with an updated table.
 
-### R2 — Always fetch + inventory
-1. Fetch OpenAPI → list every `METHOD + path`.
+### R2 � Always fetch + inventory
+1. Fetch OpenAPI ? list every `METHOD + path`.
 2. Scan `tests/consumer/**/*.spec.ts` for `withRequest(...)` paths and methods.
 3. Scan `pacts/*.json` for interactions (path, method, provider/consumer names).
 4. Classify each Swagger op: `covered` | `partial` | `missing` | `deferred`.
 
-### R3 — Equivalence mapping
+### R3 � Equivalence mapping
 Treat these as the **same** coverage for classification:
 
 | Swagger | Pact equivalent |
 |---------|-----------------|
-| `GET /api/proxy/{SVC}/…` | Service `GET /…` against that service’s provider |
+| `GET /api/proxy/{SVC}/�` | Service `GET /�` against that service�s provider |
 | `GET /api/flow/downstream/{from}/{to}` | Gateway interaction with that path |
 | Produce CT paths under proxy | `/contracts/ct-*` on producer |
 
 Mark `partial` when the edge exists but not this exact op (e.g. batch consume covered, consume-by-id not).
 
-### R4 — Known deferred
-- `POST /api/filing/upload/{clm|mdm|acc}` **200** success (needs real `.xlsx` multipart) → `deferred`
+### R4 � Known deferred
+- `POST /api/filing/upload/{clm|mdm|acc}` **200** success (needs real `.xlsx` multipart) ? `deferred`
 - Upload **400** without file may already be `covered`
 
-### R5 — Pact naming reference
+### R5 � Pact naming reference
 
 | Role | Name |
 |------|------|
 | Service provider | `TaxMesh-{CLM\|MDM\|ACC\|TAX\|ALC\|DOC}` |
 | Edge consumer | `TaxMesh-{consumerService}` |
-| Gateway | `TaxMesh-Gateway` ← `TaxMesh-Client` |
+| Gateway | `TaxMesh-Gateway` ? `TaxMesh-Client` |
 
-### R6 — Report format (final reply)
+### R6 � Report format (final reply)
 Keep it short:
 
 1. Swagger source used  
@@ -88,7 +90,7 @@ Keep it short:
 
 - Do not regenerate the suite while auditing  
 - Do not count gateway proxy + service path as two missing gaps for the same body  
-- Do not claim “complete” if multipart upload 200 is still deferred without saying so  
+- Do not claim �complete� if multipart upload 200 is still deferred without saying so  
 
 ## CI equivalent (non-interactive)
 

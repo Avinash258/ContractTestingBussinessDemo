@@ -1,8 +1,8 @@
 /**
- * OpenAPI/Swagger ↔ Pact coverage audit (ContractCoverageAuditor logic, CI-ready).
+ * OpenAPI/Swagger ? Pact coverage audit (ContractCoverageAuditor logic, CI-ready).
  *
  * Classifies every Swagger METHOD+path as covered | partial | missing | deferred.
- * Equivalence: service Pact path `/x` ≡ Swagger `/api/proxy/{SVC}/x`.
+ * Equivalence: service Pact path `/x` = Swagger `/api/proxy/{SVC}/x`.
  */
 import fs from 'fs';
 import path from 'path';
@@ -12,6 +12,10 @@ import {
   apiFlow,
   type ServiceId,
 } from '../catalog/contracts';
+import {
+  normalizeGatewayOrigin,
+  resolveGatewayBaseUrl,
+} from '../gatewayConfig';
 
 const HTTP_METHODS = new Set([
   'get',
@@ -91,31 +95,16 @@ function opKey(method: string, p: string): string {
   return `${method.toUpperCase()} ${p}`;
 }
 
-function normalizeGatewayOrigin(raw: string): string {
-  let g = raw.replace(/\/$/, '');
-  const docs = g.indexOf('/api-docs');
-  if (docs >= 0) g = g.slice(0, docs);
-  const openapi = g.indexOf('/openapi');
-  if (openapi >= 0) g = g.slice(0, openapi);
-  return g.replace(/\/$/, '');
-}
-
 export function resolveOpenApiUrl(explicit?: string): string {
   if (explicit) {
     if (explicit.endsWith('.json') || explicit.includes('openapi')) return explicit;
     return `${normalizeGatewayOrigin(explicit)}/openapi.json`;
   }
-  const gateway = normalizeGatewayOrigin(
-    process.env.GATEWAY_BASE_URL ||
-      process.env.TAXMESH_BASE_URL ||
-      process.env.PACT_PROVIDER_URL ||
-      process.env.SWAGGER_OPENAPI_URL ||
-      'https://pubmed-physiology-speaks-bibliographic.trycloudflare.com'
-  );
   if (process.env.SWAGGER_OPENAPI_URL?.includes('openapi')) {
     return process.env.SWAGGER_OPENAPI_URL;
   }
-  return `${gateway}/openapi.json`;
+  // Env override ? else gateway.config.json (single source of truth)
+  return `${resolveGatewayBaseUrl()}/openapi.json`;
 }
 
 export function listOpenApiOps(doc: any): SwaggerOp[] {
@@ -305,7 +294,7 @@ function classifyOp(
         ...op,
         status: 'deferred',
         evidence: [],
-        note: `${svc} has no ${flow} CT peer in catalog — empty peer surface`,
+        note: `${svc} has no ${flow} CT peer in catalog � empty peer surface`,
       };
     }
   }
@@ -412,7 +401,7 @@ export async function runCoverageAudit(
 
 export function formatCoverageMarkdown(report: CoverageReport): string {
   const lines = [
-    `# Swagger ↔ Pact coverage gap analysis`,
+    `# Swagger ? Pact coverage gap analysis`,
     ``,
     `Source: \`${report.source}\``,
     `Date: ${report.generatedAt.slice(0, 10)}`,
@@ -444,7 +433,7 @@ export function formatCoverageMarkdown(report: CoverageReport): string {
   lines.push(
     `## Equivalent coverage note`,
     ``,
-    `Service Pact paths \`/health\`, \`/contracts/ct-*\`, \`/downstream/{peer}\` equal Swagger \`/api/proxy/{SVC}/…\` (gateway is a transparent proxy).`,
+    `Service Pact paths \`/health\`, \`/contracts/ct-*\`, \`/downstream/{peer}\` equal Swagger \`/api/proxy/{SVC}/�\` (gateway is a transparent proxy).`,
     ``
   );
   return lines.join('\n');

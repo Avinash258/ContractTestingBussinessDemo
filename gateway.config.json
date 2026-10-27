@@ -1,0 +1,6 @@
+{
+  "$schema": "./gateway.config.schema.json",
+  "comment": "SINGLE SOURCE OF TRUTH — change gatewayBaseUrl here, then run: npm run sync:gateway",
+  "gatewayBaseUrl": "https://marco-absolute-map-mailto.trycloudflare.com",
+  "localFallback": "http://127.0.0.1:4100"
+}
