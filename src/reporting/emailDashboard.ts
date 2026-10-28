@@ -3,7 +3,11 @@
  * No JavaScript — works in Outlook / Gmail body.
  */
 import type { PactReport, ServiceMapNode } from './types';
-import { normalizeReportMismatches, parsePactMismatch } from './mismatchFormat';
+import {
+  normalizeReportMismatches,
+  parsePactMismatch,
+  readableMismatchNote,
+} from './mismatchFormat';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -225,34 +229,39 @@ export function buildEmailDashboardBody(
 
   const topology = buildTopologyTable(report.serviceMap);
 
-  const failedProviderRows = (provider.failures || [])
+  const failedFromInteractions = (provider.interactions || [])
+    .filter((item) => item.status === 'failed')
     .map((item) => {
       const clarified = clarifyFailureSide(item);
       return {
+        key: `${item.endpoint || ''}|${item.description || ''}`,
         endpoint: item.endpoint || '—',
-        description: item.interaction || '—',
+        description: item.description || '—',
         summary: clarified.summary,
         expected: clarified.expected,
         actual: clarified.actual,
       };
-    })
-    .concat(
-      // Fallback if failures[] empty but interactions mark failed
-      !(provider.failures || []).length
-        ? (provider.interactions || [])
-            .filter((item) => item.status === 'failed')
-            .map((item) => {
-              const clarified = clarifyFailureSide(item);
-              return {
-                endpoint: item.endpoint || '—',
-                description: item.description || '—',
-                summary: clarified.summary,
-                expected: clarified.expected,
-                actual: clarified.actual,
-              };
-            })
-        : []
-    );
+    });
+
+  const failedFromFailures = (provider.failures || []).map((item) => {
+    const clarified = clarifyFailureSide(item);
+    return {
+      key: `${item.endpoint || ''}|${item.interaction || ''}`,
+      endpoint: item.endpoint || '—',
+      description: item.interaction || '—',
+      summary: clarified.summary,
+      expected: clarified.expected,
+      actual: clarified.actual,
+    };
+  });
+
+  // Prefer interaction rows (richer expected/actual); merge any failure-only rows.
+  const failedProviderRows = [
+    ...failedFromInteractions,
+    ...failedFromFailures.filter(
+      (f) => !failedFromInteractions.some((ix) => ix.key === f.key || ix.description === f.description)
+    ),
+  ];
 
   const failedConsumerRows = (consumer.failures || [])
     .map((item) => ({
@@ -274,7 +283,19 @@ export function buildEmailDashboardBody(
 
   const cov = report.coverage || {};
   const consumerGaps = cov.gaps?.consumer || [];
-  const providerGaps = cov.gaps?.provider || [];
+  // Prefer live failed interactions for provider gap notes (already normalized).
+  const providerGaps =
+    failedProviderRows.length > 0
+      ? failedProviderRows.map((row) => ({
+          method: '',
+          path: row.endpoint,
+          note: row.summary,
+          operation: row.description,
+        }))
+      : (cov.gaps?.provider || []).map((g) => ({
+          ...g,
+          note: readableMismatchNote(g.note, g.note || 'Provider verification failed'),
+        }));
   const hasGaps = consumerGaps.length > 0 || providerGaps.length > 0;
   const isFailReport =
     overall === 'failed' || hasGaps || overallFailed > 0;
@@ -352,13 +373,17 @@ export function buildEmailDashboardBody(
       ? buildEndpointTable(
           'Gaps — missing / failed on provider',
           providerGaps.slice(0, 40).map((g) => ({
-            endpoint: `${g.method} ${g.path}`.trim(),
+            endpoint: `${g.method || ''} ${g.path || ''}`.trim() || '—',
             note: g.note || 'Provider verification failed',
             operation: g.operation || '—',
           })),
           [
             { label: 'Endpoint', render: (r) => escapeHtml(r.endpoint) },
-            { label: 'Detail', render: (r) => escapeHtml(r.note) },
+            {
+              label: 'What failed',
+              render: (r) =>
+                `<div style="font-family:Consolas,monospace;font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;padding:8px;border-radius:6px;border:1px solid #fde68a;background:#fffbeb;color:#78350f">${escapeHtml(r.note)}</div>`,
+            },
             { label: 'Interaction', render: (r) => escapeHtml(r.operation) },
           ]
         )

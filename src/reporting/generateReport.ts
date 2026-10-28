@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { buildTaxMeshServiceMap, buildServiceMapSvg } from './serviceMap';
 import { packInteractiveDashboardZip } from './dashboardZip';
-import { normalizeReportMismatches, parsePactMismatch } from './mismatchFormat';
+import {
+  normalizeReportMismatches,
+  parsePactMismatch,
+  readableMismatchNote,
+} from './mismatchFormat';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
 import { enrichPhaseEndpoints } from './pactEndpointLookup';
 import { loadCoverageRows, writeExcelReport } from './excelReport';
@@ -33,10 +37,15 @@ function attachCoverage(report: PactReport): PactReport {
     .filter((ix) => ix.status === 'failed')
     .map((ix) => {
       const parsed = parseMethodPath(ix.endpoint || '');
+      const noteSource =
+        ix.reason ||
+        (ix.expected && ix.actual ? `${ix.expected} → ${ix.actual}` : '') ||
+        ix.actual ||
+        '';
       return {
         method: parsed.method || ix.method || '',
         path: parsed.path || ix.path || ix.endpoint || '',
-        note: ix.reason || `${ix.expected || ''} → ${ix.actual || ''}`.trim() || 'Provider verification failed',
+        note: readableMismatchNote(noteSource, 'Provider verification failed'),
         operation: ix.description || '',
       };
     });
@@ -53,7 +62,14 @@ function attachCoverage(report: PactReport): PactReport {
     providerGaps.push({
       method: parsed.method,
       path: parsed.path || failure.endpoint || '',
-      note: failure.reason || 'Provider verification failed',
+      note: readableMismatchNote(
+        failure.reason ||
+          (failure.expected && failure.actual
+            ? `${failure.expected} → ${failure.actual}`
+            : failure.actual) ||
+          '',
+        'Provider verification failed'
+      ),
       operation: failure.interaction || '',
     });
   }
@@ -689,37 +705,37 @@ export function buildReport(input: {
   const provider = enrichPhaseEndpoints(input.provider, pactsDir);
   const serviceMap = buildTaxMeshServiceMap(consumer, provider);
 
-  return normalizeReportMismatches(
-    attachCoverage({
-      generatedAt: new Date().toISOString(),
-      project: 'TaxMesh Pact Contract Tests',
-      overallStatus,
-      consumer,
-      provider,
-      pactFiles: input.pactFiles,
-      serviceMap,
-      phases: {
-        consumer: {
-          ran: consumer.ran,
-          status: consumer.status,
-          passed: consumer.passed,
-          total: consumer.total,
-          failed: consumer.failed,
-          label: consumer.label,
-        },
-        provider: {
-          ran: provider.ran,
-          status: provider.status,
-          passed: provider.passed,
-          total: provider.total,
-          failed: provider.failed,
-          label: provider.label,
-          providerBaseUrl: provider.providerBaseUrl,
-        },
+  // Normalize mismatches first so coverage gap notes use readable expected/actual.
+  const base = normalizeReportMismatches({
+    generatedAt: new Date().toISOString(),
+    project: 'TaxMesh Pact Contract Tests',
+    overallStatus,
+    consumer,
+    provider,
+    pactFiles: input.pactFiles,
+    serviceMap,
+    phases: {
+      consumer: {
+        ran: consumer.ran,
+        status: consumer.status,
+        passed: consumer.passed,
+        total: consumer.total,
+        failed: consumer.failed,
+        label: consumer.label,
       },
-      environment: input.environment || {},
-    })
-  );
+      provider: {
+        ran: provider.ran,
+        status: provider.status,
+        passed: provider.passed,
+        total: provider.total,
+        failed: provider.failed,
+        label: provider.label,
+        providerBaseUrl: provider.providerBaseUrl,
+      },
+    },
+    environment: input.environment || {},
+  });
+  return attachCoverage(base);
 }
 
 export async function writeReports(report: PactReport): Promise<{

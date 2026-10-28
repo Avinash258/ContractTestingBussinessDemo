@@ -4,6 +4,7 @@ import nodemailer from 'nodemailer';
 import type { PactReport } from './types';
 import { packInteractiveDashboardZip } from './dashboardZip';
 import { buildEmailDashboardBody } from './emailDashboard';
+import { readableMismatchNote } from './mismatchFormat';
 
 export async function sendReportEmail(options?: {
   reportPath?: string;
@@ -141,7 +142,8 @@ export async function sendReportEmail(options?: {
   if (providerGaps.length) {
     gapLines.push('', `Provider gaps / failures (${providerGaps.length}):`);
     for (const g of providerGaps.slice(0, 25)) {
-      gapLines.push(`  - ${g.method} ${g.path}${g.note ? ` — ${g.note}` : ''}`);
+      const note = g.note ? readableMismatchNote(g.note, g.note) : '';
+      gapLines.push(`  - ${g.method} ${g.path}${note ? ` — ${note}` : ''}`);
     }
     if (providerGaps.length > 25) gapLines.push(`  … +${providerGaps.length - 25} more`);
   }

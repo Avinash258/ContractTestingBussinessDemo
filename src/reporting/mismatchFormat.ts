@@ -32,14 +32,39 @@ function tryParseJson(value: unknown): unknown {
   }
 }
 
-function formatValue(value: unknown, maxLen = 280): string {
+function formatValue(value: unknown, maxLen = 280, depth = false): string {
   if (value === undefined || value === null) return '—';
+  // Keep typed primitives distinct (e.g. string "2025" vs integer 2025)
+  if (typeof value === 'string') {
+    // Pact often JSON-encodes the value again: "\"2025\"" → unwrap once
+    if (!depth) {
+      const trimmed = value.trim();
+      if (/^["{\[]/.test(trimmed)) {
+        try {
+          return formatValue(JSON.parse(trimmed), maxLen, true);
+        } catch {
+          /* keep raw string */
+        }
+      }
+    }
+    const text = JSON.stringify(value);
+    return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : `${text} (string)`;
+  }
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? `${value} (integer)` : `${value} (number)`;
+  }
+  if (typeof value === 'boolean') return `${value} (boolean)`;
+
   const parsed = tryParseJson(value);
   let text: string;
   if (Array.isArray(parsed)) {
     text = parsed.map((v) => String(v)).join(', ');
-  } else if (typeof parsed === 'object') {
+  } else if (typeof parsed === 'object' && parsed !== null) {
     text = JSON.stringify(parsed, null, 0);
+  } else if (typeof parsed === 'string') {
+    text = `${JSON.stringify(parsed)} (string)`;
+  } else if (typeof parsed === 'number') {
+    text = Number.isInteger(parsed) ? `${parsed} (integer)` : `${parsed} (number)`;
   } else {
     text = String(parsed);
   }
@@ -154,43 +179,71 @@ export function humanMismatchPath(
   return raw;
 }
 
-/** Pull a JSON string field even from truncated Pact mismatch blobs. */
-function extractJsonStringField(text: string, field: 'expected' | 'actual'): string | undefined {
-  const marker = `"${field}":"`;
+/** Pull a JSON field (string/number/bool/null) even from truncated Pact blobs. */
+function extractJsonField(text: string, field: string): unknown {
+  const marker = `"${field}":`;
   const start = text.indexOf(marker);
   if (start < 0) return undefined;
   let i = start + marker.length;
-  let out = '';
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '\\' && i + 1 < text.length) {
-      out += ch + text[i + 1];
-      i += 2;
-      continue;
-    }
-    if (ch === '"') {
-      try {
-        return JSON.parse(`"${out}"`);
-      } catch {
-        return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-      }
-    }
-    out += ch;
+  while (i < text.length && /\s/.test(text[i])) i += 1;
+  if (i >= text.length) return undefined;
+
+  if (text[i] === '"') {
     i += 1;
+    let out = '';
+    while (i < text.length) {
+      const ch = text[i];
+      if (ch === '\\' && i + 1 < text.length) {
+        out += ch + text[i + 1];
+        i += 2;
+        continue;
+      }
+      if (ch === '"') {
+        try {
+          return JSON.parse(`"${out}"`);
+        } catch {
+          return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+      }
+      out += ch;
+      i += 1;
+    }
+    return out
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\$/, '')
+      .replace(/,?\s*"$/, '');
   }
-  // Truncated before closing quote — return partial unescaped value
-  return out
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\')
-    .replace(/\\$/, '')
-    .replace(/,?\s*"$/, '');
+
+  const rest = text.slice(i);
+  const lit = rest.match(/^(null|true|false|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+  if (lit) {
+    try {
+      return JSON.parse(lit[1]);
+    } catch {
+      return lit[1];
+    }
+  }
+  return undefined;
 }
 
 function salvageTruncatedMismatch(text: string): ParsedMismatch | null {
-  if (!text.includes('"mismatches"') && !text.includes('"expected"')) return null;
-  const expectedRaw = extractJsonStringField(text, 'expected');
-  const actualRaw = extractJsonStringField(text, 'actual');
-  if (expectedRaw == null && actualRaw == null) return null;
+  if (!text.includes('"mismatches"') && !text.includes('"expected"') && !text.includes('"path"')) {
+    return null;
+  }
+  const expectedRaw = extractJsonField(text, 'expected');
+  const actualRaw = extractJsonField(text, 'actual');
+  const pathRaw = extractJsonField(text, 'path');
+  const typeRaw = extractJsonField(text, 'type');
+  const messageRaw = extractJsonField(text, 'mismatch') ?? extractJsonField(text, 'message');
+  if (expectedRaw == null && actualRaw == null && messageRaw == null) return null;
+
+  const pathLabel = humanMismatchPath(
+    pathRaw != null ? String(pathRaw) : undefined,
+    typeRaw != null ? String(typeRaw) : 'BodyMismatch',
+    false,
+    true
+  );
 
   const keyDiff = keyListDiff(expectedRaw, actualRaw);
   if (keyDiff) {
@@ -200,29 +253,51 @@ function salvageTruncatedMismatch(text: string): ParsedMismatch | null {
       actual: keyDiff.actual,
       details: [
         {
-          path: humanMismatchPath('$', 'BodyMismatch', true),
+          path: humanMismatchPath(pathRaw != null ? String(pathRaw) : '$', 'BodyMismatch', true),
           expected: keyDiff.expected,
           actual: keyDiff.actual,
           message: keyDiff.summary,
-          type: 'BodyMismatch',
+          type: typeRaw != null ? String(typeRaw) : 'BodyMismatch',
         },
       ],
     };
   }
 
-  const expected = expectedRaw != null ? formatValue(expectedRaw, 500) : 'Contract match';
-  const actual = actualRaw != null ? formatValue(actualRaw, 500) : formatValue(text, 400);
+  const expected =
+    expectedRaw !== undefined ? formatValue(expectedRaw, 500) : 'Contract match';
+  const actual =
+    actualRaw !== undefined ? formatValue(actualRaw, 500) : formatValue(text, 400);
+  const summary =
+    (messageRaw != null ? String(messageRaw) : '') ||
+    `${pathLabel}: expected «${expected}» got «${actual}»`;
+
   return {
-    summary: `Body mismatch — expected «${expected}» got «${actual}»`.slice(0, 320),
-    expected,
-    actual,
+    summary: summary.length > 320 ? `${summary.slice(0, 319)}…` : summary,
+    expected: pathRaw != null ? `${pathLabel}: ${expected}` : expected,
+    actual: pathRaw != null ? `${pathLabel}: ${actual}` : actual,
     details: [{
-      path: humanMismatchPath('$', 'BodyMismatch', false, true),
+      path: pathLabel,
       expected,
       actual,
-      message: 'Body mismatch (salvaged from truncated verifier output)',
+      message: summary,
+      type: typeRaw != null ? String(typeRaw) : undefined,
     }],
   };
+}
+
+/** Readable one-line note for gap tables / email (never raw Pact JSON). */
+export function readableMismatchNote(raw: unknown, fallback = 'Provider verification failed'): string {
+  const text = String(raw ?? '').trim();
+  if (!text) return fallback;
+  if (
+    !text.includes('"mismatches"') &&
+    !/see mismatch/i.test(text) &&
+    !text.includes('"expected"')
+  ) {
+    return text.length > 280 ? `${text.slice(0, 279)}…` : text;
+  }
+  const parsed = parsePactMismatch(text);
+  return parsed.summary || `${parsed.expected} → ${parsed.actual}` || fallback;
 }
 
 function fromMismatchList(mismatches: any[]): ParsedMismatch {

@@ -1250,30 +1250,44 @@
       };
     }
 
-    function extractJsonStringField(text, field) {
-      const marker = `"${field}":"`;
+    function extractJsonField(text, field) {
+      const marker = `"${field}":`;
       const start = text.indexOf(marker);
       if (start < 0) return undefined;
       let i = start + marker.length;
-      let out = '';
-      while (i < text.length) {
-        const ch = text[i];
-        if (ch === '\\' && i + 1 < text.length) { out += ch + text[i + 1]; i += 2; continue; }
-        if (ch === '"') {
-          try { return JSON.parse(`"${out}"`); }
-          catch { return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
-        }
-        out += ch;
+      while (i < text.length && /\s/.test(text[i])) i += 1;
+      if (i >= text.length) return undefined;
+      if (text[i] === '"') {
         i += 1;
+        let out = '';
+        while (i < text.length) {
+          const ch = text[i];
+          if (ch === '\\' && i + 1 < text.length) { out += ch + text[i + 1]; i += 2; continue; }
+          if (ch === '"') {
+            try { return JSON.parse(`"${out}"`); }
+            catch { return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
+          }
+          out += ch;
+          i += 1;
+        }
+        return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\').replace(/\\$/, '').replace(/,?\s*"$/, '');
       }
-      return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\').replace(/\\$/, '').replace(/,?\s*"$/, '');
+      const lit = text.slice(i).match(/^(null|true|false|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+      if (lit) {
+        try { return JSON.parse(lit[1]); } catch { return lit[1]; }
+      }
+      return undefined;
     }
 
     function salvageTruncatedMismatch(text) {
-      if (!text.includes('"mismatches"') && !text.includes('"expected"')) return null;
-      const expectedRaw = extractJsonStringField(text, 'expected');
-      const actualRaw = extractJsonStringField(text, 'actual');
-      if (expectedRaw == null && actualRaw == null) return null;
+      if (!text.includes('"mismatches"') && !text.includes('"expected"') && !text.includes('"path"')) return null;
+      const expectedRaw = extractJsonField(text, 'expected');
+      const actualRaw = extractJsonField(text, 'actual');
+      const pathRaw = extractJsonField(text, 'path');
+      const typeRaw = extractJsonField(text, 'type');
+      const messageRaw = extractJsonField(text, 'mismatch') || extractJsonField(text, 'message');
+      if (expectedRaw == null && actualRaw == null && messageRaw == null) return null;
+      const pathLabel = humanMismatchPath(pathRaw != null ? String(pathRaw) : undefined, typeRaw != null ? String(typeRaw) : 'BodyMismatch', false, true);
       const keyDiff = keyListDiff(expectedRaw, actualRaw);
       if (keyDiff) {
         return {
@@ -1283,13 +1297,14 @@
           details: [{ path: 'Response body keys', expected: keyDiff.expected, actual: keyDiff.actual, message: keyDiff.summary, type: 'BodyMismatch' }],
         };
       }
-      const expected = expectedRaw != null ? formatMismatchValue(expectedRaw, 500) : 'Contract match';
-      const actual = actualRaw != null ? formatMismatchValue(actualRaw, 500) : formatMismatchValue(text, 400);
+      const expected = expectedRaw !== undefined ? formatMismatchValue(expectedRaw, 500) : 'Contract match';
+      const actual = actualRaw !== undefined ? formatMismatchValue(actualRaw, 500) : formatMismatchValue(text, 400);
+      const summary = (messageRaw != null ? String(messageRaw) : '') || `${pathLabel}: expected «${expected}» got «${actual}»`;
       return {
-        summary: `Body mismatch — expected «${expected}» got «${actual}»`.slice(0, 320),
-        expected,
-        actual,
-        details: [{ path: 'Response body', expected, actual, message: 'Body mismatch (salvaged)' }],
+        summary: summary.length > 320 ? `${summary.slice(0, 319)}…` : summary,
+        expected: pathRaw != null ? `${pathLabel}: ${expected}` : expected,
+        actual: pathRaw != null ? `${pathLabel}: ${actual}` : actual,
+        details: [{ path: pathLabel, expected, actual, message: summary, type: typeRaw != null ? String(typeRaw) : undefined }],
       };
     }
 
