@@ -7,7 +7,8 @@
  *   GATEWAY_BASE_URL=https://….trycloudflare.com npm run test:swagger-coverage
  *
  * Env:
- *   GATEWAY_BASE_URL / TAXMESH_BASE_URL / SWAGGER_OPENAPI_URL — OpenAPI source
+ *   GATEWAY_BASE_URL / TAXMESH_BASE_URL — gateway under test (OpenAPI = {gateway}/openapi.json)
+ *   SWAGGER_OPENAPI_URL — only used when same origin as gateway (stale local swagger ignored)
  *   SWAGGER_COVERAGE_FAIL=1 — exit 1 when unexpected missing ops (CI default)
  *   SWAGGER_COVERAGE_WRITE_DOC=1 — refresh docs/SWAGGER_GAP_COVERAGE.md
  */
@@ -16,8 +17,10 @@ import path from 'path';
 import {
   formatCoverageMarkdown,
   resolveOpenApiUrl,
+  resolveSwaggerUiUrl,
   runCoverageAudit,
 } from '../src/swagger/coverageAudit';
+import { normalizeGatewayOrigin } from '../src/gatewayConfig';
 
 const failOnGap =
   process.argv.includes('--fail-on-gap') ||
@@ -34,8 +37,12 @@ const urlArg =
 
 async function main() {
   const openApiUrl = resolveOpenApiUrl(urlArg);
+  const gateway = normalizeGatewayOrigin(openApiUrl);
+  const swaggerUi = resolveSwaggerUiUrl(gateway);
   console.log('\n=== Swagger ↔ Pact coverage audit ===\n');
-  console.log(`OpenAPI: ${openApiUrl}`);
+  console.log(`Gateway : ${gateway}`);
+  console.log(`OpenAPI : ${openApiUrl}`);
+  console.log(`Swagger : ${swaggerUi}`);
 
   const report = await runCoverageAudit({ openApiUrl });
 

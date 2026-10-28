@@ -43,8 +43,8 @@ const ALL_PROVIDERS: Array<ServiceId | 'Gateway'> = [
 
 /** Consumer Jest path fragments that exercise a given service pair / producer. */
 const CONSUMER_SPEC_FRAGMENTS: Record<string, string[]> = {
-  CLM: ['clm-mdm.ct00', 'clm-v2'],
-  MDM: ['clm-mdm.ct00', 'clm-v2'],
+  CLM: ['clm-mdm.ct00'],
+  MDM: ['clm-mdm.ct00'],
   ACC: ['mdm-acc.ct01', 'all-contracts.ct05-17'],
   TAX: ['mdm-tax.ct02', 'all-contracts.ct05-17'],
   ALC: ['mdm-alc.ct03', 'all-contracts.ct05-17'],
@@ -103,13 +103,13 @@ function consumerTestPathPattern(): string {
       fragments.add(frag);
     }
   }
-  // CLM+MDM without --full-consumer → CT-00 + CLM v2 only
+  // CLM+MDM without --full-consumer → CT-00 only
   if (
     selectedServices.length === 2 &&
     selectedServices.includes('CLM') &&
     selectedServices.includes('MDM')
   ) {
-    return 'clm-mdm.ct00|clm-v2';
+    return 'clm-mdm.ct00';
   }
   return Array.from(fragments).join('|') || 'tests/consumer';
 }

@@ -116,14 +116,20 @@ stages:
               set -euo pipefail
               node scripts/resolve-gateway-url.js --ado
               export GATEWAY_BASE_URL="$(
-                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= \
+                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= SWAGGER_OPENAPI_URL= \
                 node scripts/resolve-gateway-url.js
               )"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/openapi*}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
-              echo "Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
+              # Swagger gate MUST use this gateway's OpenAPI — never a stale library URL
+              unset SWAGGER_OPENAPI_URL || true
+              export SWAGGER_OPENAPI_URL="${GATEWAY_BASE_URL}/openapi.json"
+              echo "Gateway under test : $GATEWAY_BASE_URL"
+              echo "OpenAPI (gate)     : $SWAGGER_OPENAPI_URL"
+              echo "Swagger UI         : ${GATEWAY_BASE_URL}/api-docs"
               npm run test:swagger-coverage:ci
             displayName: 'Swagger coverage gate (OpenAPI ↔ Pact)'
             condition: and(succeededOrFailed(), eq('${{ parameters.runSwaggerCoverageGate }}', true))
@@ -278,14 +284,19 @@ stages:
               set -euo pipefail
               node scripts/resolve-gateway-url.js --ado
               export GATEWAY_BASE_URL="$(
-                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= \
+                GATEWAY_BASE_URL= TAXMESH_BASE_URL= PACT_PROVIDER_URL= SWAGGER_OPENAPI_URL= \
                 node scripts/resolve-gateway-url.js
               )"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
+              export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/openapi*}"
               export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
               export TAXMESH_BASE_URL="${GATEWAY_BASE_URL}"
-              echo "Provider-stage Swagger coverage audit against: $GATEWAY_BASE_URL/openapi.json"
+              unset SWAGGER_OPENAPI_URL || true
+              export SWAGGER_OPENAPI_URL="${GATEWAY_BASE_URL}/openapi.json"
+              echo "Provider-stage gateway : $GATEWAY_BASE_URL"
+              echo "OpenAPI (gate)         : $SWAGGER_OPENAPI_URL"
+              echo "Swagger UI             : ${GATEWAY_BASE_URL}/api-docs"
               npm run test:swagger-coverage:ci
             displayName: 'Swagger coverage gate — provider stage (OpenAPI ↔ Pact)'
             condition: and(succeededOrFailed(), eq('${{ parameters.runSwaggerCoverageGate }}', true))

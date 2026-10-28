@@ -95,16 +95,56 @@ function opKey(method: string, p: string): string {
   return `${method.toUpperCase()} ${p}`;
 }
 
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return normalizeGatewayOrigin(a) === normalizeGatewayOrigin(b);
+  }
+}
+
+/**
+ * OpenAPI URL for the Swagger coverage gate.
+ * Always follows the gateway under test (`GATEWAY_BASE_URL` / gateway.config.json).
+ * `SWAGGER_OPENAPI_URL` is honored only when it points at the same origin ?
+ * so a stale local `:4200` swagger cannot fail CI against marco.
+ */
 export function resolveOpenApiUrl(explicit?: string): string {
+  const gateway = normalizeGatewayOrigin(
+    explicit ||
+      process.env.GATEWAY_BASE_URL ||
+      process.env.TAXMESH_BASE_URL ||
+      process.env.PACT_PROVIDER_URL ||
+      resolveGatewayBaseUrl()
+  );
+  const derived = `${gateway}/openapi.json`;
+
   if (explicit) {
-    if (explicit.endsWith('.json') || explicit.includes('openapi')) return explicit;
-    return `${normalizeGatewayOrigin(explicit)}/openapi.json`;
+    if (explicit.endsWith('.json') || /openapi|swagger/i.test(explicit)) {
+      return explicit.includes('://') ? explicit : derived;
+    }
+    return derived;
   }
-  if (process.env.SWAGGER_OPENAPI_URL?.includes('openapi')) {
-    return process.env.SWAGGER_OPENAPI_URL;
+
+  const override = String(process.env.SWAGGER_OPENAPI_URL || '').trim();
+  if (override && /openapi|swagger/i.test(override)) {
+    if (sameOrigin(override, gateway)) return override;
+    console.warn(
+      `[swagger-coverage] Ignoring SWAGGER_OPENAPI_URL=${override} (different origin than gateway ${gateway}). Using ${derived}`
+    );
   }
-  // Env override ? else gateway.config.json (single source of truth)
-  return `${resolveGatewayBaseUrl()}/openapi.json`;
+
+  return derived;
+}
+
+/** Human-facing Swagger UI for the same gateway (docs only). */
+export function resolveSwaggerUiUrl(gatewayOrOpenApi?: string): string {
+  const origin = normalizeGatewayOrigin(
+    gatewayOrOpenApi ||
+      process.env.GATEWAY_BASE_URL ||
+      resolveGatewayBaseUrl()
+  );
+  return `${origin}/api-docs`;
 }
 
 export function listOpenApiOps(doc: any): SwaggerOp[] {
@@ -338,7 +378,7 @@ function classifyOp(
   if (proxy) {
     const svc = proxy[1];
     const servicePath = proxy[2];
-    // Bare service paths (e.g. /v2/status) exist on several services; only accept
+    // Bare service paths (e.g. /health) exist on every service; only accept
     // evidence tied to this service. Pact files already add exact proxy-equiv keys.
     const svcEvidence = (evidence.get(opKey(op.method, servicePath)) || []).filter(
       (s) => s === `catalog:service-path:${svc}`

@@ -120,7 +120,15 @@ jobs:
           SWAGGER_COVERAGE_WRITE_DOC: '1'
         run: |
           set -euo pipefail
-          echo "Swagger coverage against: ${GATEWAY_BASE_URL}/openapi.json"
+          export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+          export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/api-docs*}"
+          export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%%/openapi*}"
+          export GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/}"
+          unset SWAGGER_OPENAPI_URL || true
+          export SWAGGER_OPENAPI_URL="${GATEWAY_BASE_URL}/openapi.json"
+          echo "Gateway under test : $GATEWAY_BASE_URL"
+          echo "OpenAPI (gate)     : $SWAGGER_OPENAPI_URL"
+          echo "Swagger UI         : ${GATEWAY_BASE_URL}/api-docs"
           npm run test:swagger-coverage:ci
 
       - name: Run provider verification + report

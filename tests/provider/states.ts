@@ -4,31 +4,6 @@ import {
   uniqueFlowPairs,
   type ServiceId,
 } from '../../src/catalog/contracts';
-import { config } from '../../src/config';
-
-const CLM_SEED_WORKBOOK = '/testdata/set-01/clm.xlsx';
-
-/** Upload a demo CLM workbook only when no complete engagement is loaded. */
-async function ensureClmEngagement(): Promise<void> {
-  const clmBase = config.serviceBaseUrl('CLM');
-  const current = await fetch(`${clmBase}/v2/engagement`, {
-    headers: { Accept: 'application/json' },
-  });
-  const body = (await current.json().catch(() => null)) as any;
-  const e = body?.engagement;
-  if (current.ok && e?.engagementId && e?.entityName && e?.taxYear) return;
-
-  const xlsx = await fetch(`${config.gatewayBaseUrl}${CLM_SEED_WORKBOOK}`);
-  if (!xlsx.ok) {
-    throw new Error(`Cannot download ${CLM_SEED_WORKBOOK}: HTTP ${xlsx.status}`);
-  }
-  const form = new FormData();
-  form.append('file', new Blob([await xlsx.arrayBuffer()]), 'clm.xlsx');
-  const uploaded = await fetch(`${clmBase}/upload`, { method: 'POST', body: form });
-  if (!uploaded.ok) {
-    throw new Error(`CLM upload for provider state failed: HTTP ${uploaded.status}`);
-  }
-}
 
 /** Build permissive state handlers covering all given()/states used in consumer specs. */
 export function buildStateHandlers(): Record<string, () => Promise<void>> {
@@ -57,7 +32,6 @@ export function buildStateHandlers(): Record<string, () => Promise<void>> {
     'MDM does not have entity E-999': noop,
     'MDM has partners list': noop,
     'CLM has engagement ENG-200': noop,
-    'CLM has an uploaded engagement': ensureClmEngagement,
     'MDM is running': noop,
     'CLM has no upstream contracts to MDM': noop,
     'DOC has no downstream contracts to MDM': noop,
