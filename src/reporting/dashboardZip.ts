@@ -4,10 +4,11 @@ import os from 'os';
 import { execSync } from 'child_process';
 import type { PactReport } from './types';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
+import { normalizeReportMismatches } from './mismatchFormat';
 
 function sanitizeReportForEmail(report: PactReport): PactReport {
   const copy = JSON.parse(JSON.stringify(report)) as PactReport;
-  return copy;
+  return normalizeReportMismatches(copy);
 }
 
 function encodeReportForHtmlEmbed(report: PactReport): string {

@@ -490,6 +490,151 @@
 
     .failure h4 { margin-bottom: 8px; color: #991b1b; }
 
+    /* Expected vs Actual comparison cells */
+    .cmp {
+      display: grid;
+      gap: 6px;
+      min-width: 180px;
+      max-width: 420px;
+    }
+
+    .cmp-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .cmp-label.expected { color: #166534; }
+    .cmp-label.actual { color: #991b1b; }
+    [data-theme="dark"] .cmp-label.expected { color: #86efac; }
+    [data-theme="dark"] .cmp-label.actual { color: #fca5a5; }
+
+    .cmp-box {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 180px;
+      overflow: auto;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+
+    .cmp-box.expected {
+      border-color: #86efac;
+      background: #f0fdf4;
+      color: #14532d;
+    }
+
+    .cmp-box.actual {
+      border-color: #fca5a5;
+      background: #fef2f2;
+      color: #7f1d1d;
+    }
+
+    [data-theme="dark"] .cmp-box.expected {
+      background: rgba(22, 101, 52, 0.25);
+      border-color: #166534;
+      color: #bbf7d0;
+    }
+
+    [data-theme="dark"] .cmp-box.actual {
+      background: rgba(153, 27, 27, 0.28);
+      border-color: #991b1b;
+      color: #fecaca;
+    }
+
+    .cmp-box.ok {
+      border-color: var(--border);
+      background: var(--surface-2);
+      color: var(--muted);
+    }
+
+    .cmp-hint {
+      font-size: 0.72rem;
+      color: #92400e;
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+
+    .compare-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: center;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      font-size: 0.82rem;
+      color: #78350f;
+    }
+
+    .compare-legend .swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .compare-legend .swatch.exp { background: #86efac; border: 1px solid #166534; }
+    .compare-legend .swatch.act { background: #fca5a5; border: 1px solid #991b1b; }
+
+    #providerTableEl.failed-focus th:nth-child(6),
+    #providerTableEl.failed-focus td:nth-child(6) {
+      display: none;
+    }
+
+    #providerTableEl th:nth-child(4),
+    #providerTableEl th:nth-child(5),
+    #highlightsSection th:nth-child(4),
+    #highlightsSection th:nth-child(5) {
+      min-width: 220px;
+      width: 28%;
+    }
+
+    #providerTableEl th:nth-child(1),
+    #providerTableEl td:nth-child(1) {
+      min-width: 140px;
+      max-width: 220px;
+    }
+
+    #providerTableEl th:nth-child(2),
+    #providerTableEl td:nth-child(2) {
+      min-width: 140px;
+      max-width: 260px;
+    }
+
+    .failure table td:nth-child(2),
+    .failure table td:nth-child(3) {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: 420px;
+      vertical-align: top;
+    }
+
+    .failure td.exp-cell {
+      background: #f0fdf4;
+      color: #14532d;
+      border-left: 3px solid #86efac;
+    }
+
+    .failure td.act-cell {
+      background: #fef2f2;
+      color: #7f1d1d;
+      border-left: 3px solid #fca5a5;
+    }
+
     .empty {
       color: var(--muted);
       padding: 24px;
@@ -756,7 +901,7 @@
           <div class="table-scroll">
             <table>
               <thead>
-                <tr><th>Phase</th><th>Endpoint</th><th>Test / interaction</th><th>Expected</th><th>Actual</th></tr>
+                <tr><th>Phase</th><th>Endpoint</th><th>Test / interaction</th><th>Expected (contract)</th><th>Actual (live API)</th></tr>
               </thead>
               <tbody id="highlightsTable"></tbody>
             </table>
@@ -809,6 +954,11 @@
         </summary>
         <div class="body">
           <p class="meta">Live API validated against generated pact files</p>
+          <div class="compare-legend" id="providerCompareLegend">
+            <span><span class="swatch exp"></span><strong>Expected</strong> = what the Pact contract required</span>
+            <span><span class="swatch act"></span><strong>Actual</strong> = what the live API returned</span>
+            <span>Green / red cells appear on failed rows only.</span>
+          </div>
           <div class="table-controls">
             <input type="search" id="providerSearch" placeholder="Search endpoint / interaction / pact" aria-label="Search provider interactions" />
             <select id="providerFilter" aria-label="Filter provider status">
@@ -822,13 +972,21 @@
           </div>
           <div class="table-scroll">
             <table id="providerTableEl">
+              <colgroup>
+                <col style="width:16%" />
+                <col style="width:18%" />
+                <col style="width:8%" />
+                <col style="width:26%" />
+                <col style="width:26%" />
+                <col style="width:6%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th class="sortable" data-sort="endpoint">Endpoint</th>
                   <th class="sortable" data-sort="description">Interaction</th>
                   <th class="sortable" data-sort="status">Status</th>
-                  <th>Expected</th>
-                  <th>Actual</th>
+                  <th>Expected (contract)</th>
+                  <th>Actual (live API)</th>
                   <th class="sortable" data-sort="durationMs">Duration</th>
                 </tr>
               </thead>
@@ -1039,6 +1197,229 @@
       const method = methodPill(ep);
       const path = ep.replace(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/i, '');
       return `<span class="endpoint-cell">${method}<code>${escapeHtml(path || ep)}</code><button type="button" class="copy-btn" data-copy="${escapeHtml(ep)}" aria-label="Copy endpoint">Copy</button></span>`;
+    }
+
+    function tryParseJson(value) {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      if (!trimmed) return value;
+      try { return JSON.parse(trimmed); } catch { return value; }
+    }
+
+    function formatMismatchValue(value, maxLen = 280) {
+      if (value === undefined || value === null) return '—';
+      const parsed = tryParseJson(value);
+      let text;
+      if (Array.isArray(parsed)) text = parsed.map((v) => String(v)).join(', ');
+      else if (parsed && typeof parsed === 'object') text = JSON.stringify(parsed);
+      else text = String(parsed);
+      return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : text;
+    }
+
+    function parseKeyList(raw) {
+      if (Array.isArray(raw) && raw.every((x) => typeof x === 'string')) return raw;
+      const text = String(raw ?? '').trim();
+      if (!text) return null;
+      const parsed = tryParseJson(text);
+      if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) return parsed;
+      const keys = [];
+      const re = /"([^"\\]*(?:\\.[^"\\]*)*)"/g;
+      let match;
+      while ((match = re.exec(text)) !== null) {
+        try { keys.push(JSON.parse(`"${match[1]}"`)); }
+        catch { keys.push(match[1]); }
+      }
+      return keys.length ? keys : null;
+    }
+
+    function keyListDiff(expectedRaw, actualRaw) {
+      const exp = parseKeyList(expectedRaw);
+      const act = parseKeyList(actualRaw);
+      if (!exp || !act) return null;
+      const expSet = new Set(exp);
+      const actSet = new Set(act);
+      const missing = exp.filter((k) => !actSet.has(k));
+      const extra = act.filter((k) => !expSet.has(k));
+      const parts = [];
+      if (missing.length) parts.push(`missing in response: ${missing.join(', ')}`);
+      if (extra.length) parts.push(`extra in response: ${extra.join(', ')}`);
+      return {
+        expected: `keys: ${exp.join(', ')}`,
+        actual: `keys: ${act.join(', ')}`,
+        summary: parts.length ? parts.join(' · ') : 'key set differs',
+      };
+    }
+
+    function extractJsonStringField(text, field) {
+      const marker = `"${field}":"`;
+      const start = text.indexOf(marker);
+      if (start < 0) return undefined;
+      let i = start + marker.length;
+      let out = '';
+      while (i < text.length) {
+        const ch = text[i];
+        if (ch === '\\' && i + 1 < text.length) { out += ch + text[i + 1]; i += 2; continue; }
+        if (ch === '"') {
+          try { return JSON.parse(`"${out}"`); }
+          catch { return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
+        }
+        out += ch;
+        i += 1;
+      }
+      return out.replace(/\\"/g, '"').replace(/\\\\/g, '\\').replace(/\\$/, '').replace(/,?\s*"$/, '');
+    }
+
+    function salvageTruncatedMismatch(text) {
+      if (!text.includes('"mismatches"') && !text.includes('"expected"')) return null;
+      const expectedRaw = extractJsonStringField(text, 'expected');
+      const actualRaw = extractJsonStringField(text, 'actual');
+      if (expectedRaw == null && actualRaw == null) return null;
+      const keyDiff = keyListDiff(expectedRaw, actualRaw);
+      if (keyDiff) {
+        return {
+          summary: keyDiff.summary,
+          expected: keyDiff.expected,
+          actual: keyDiff.actual,
+          details: [{ path: 'Response body keys', expected: keyDiff.expected, actual: keyDiff.actual, message: keyDiff.summary, type: 'BodyMismatch' }],
+        };
+      }
+      const expected = expectedRaw != null ? formatMismatchValue(expectedRaw, 500) : 'Contract match';
+      const actual = actualRaw != null ? formatMismatchValue(actualRaw, 500) : formatMismatchValue(text, 400);
+      return {
+        summary: `Body mismatch — expected «${expected}» got «${actual}»`.slice(0, 320),
+        expected,
+        actual,
+        details: [{ path: 'Response body', expected, actual, message: 'Body mismatch (salvaged)' }],
+      };
+    }
+
+    /** Turn Pact JSONPath (`$`, `$.foo`) into a readable Field/path label. */
+    function humanMismatchPath(path, type, isKeyList, hasValues) {
+      const raw = String(path || '').trim();
+      const typeLower = String(type || '').toLowerCase();
+      if (isKeyList || /key/i.test(raw) || raw === 'Response body keys') return 'Response body keys';
+      if (!raw || raw === '$' || raw === '$.' || raw === 'body' || raw === 'mismatch') {
+        if (typeLower.includes('status')) return 'HTTP status';
+        if (typeLower.includes('header')) return 'Response header';
+        return 'Response body';
+      }
+      if (raw.startsWith('Response body')) return raw;
+      if (raw.startsWith('$.')) return `Response body → ${raw.slice(2)}`;
+      if (raw.startsWith('$[')) return `Response body → ${raw.slice(1)}`;
+      if (raw.startsWith('$')) return `Response body → ${raw.slice(1) || '(root)'}`;
+      return raw;
+    }
+
+    /** Parse raw Pact verifier mismatch JSON into readable expected/actual. */
+    function parsePactMismatch(raw) {
+      if (raw == null || raw === '') {
+        return { summary: 'Provider verification failed', expected: '—', actual: 'Failed', details: [] };
+      }
+      let data = raw;
+      if (typeof raw === 'string') {
+        try { data = JSON.parse(raw); }
+        catch {
+          const salvaged = salvageTruncatedMismatch(raw);
+          if (salvaged) return salvaged;
+          const text = raw.length > 400 ? `${raw.slice(0, 399)}…` : raw;
+          return { summary: text, expected: 'Contract match', actual: text, details: [{ message: text }] };
+        }
+      }
+      const mismatches = Array.isArray(data?.mismatches)
+        ? data.mismatches
+        : Array.isArray(data)
+          ? data
+          : data?.mismatch?.mismatches || [];
+      if (!mismatches.length) {
+        if (typeof raw === 'string') {
+          const salvaged = salvageTruncatedMismatch(raw);
+          if (salvaged) return salvaged;
+        }
+        const text = formatMismatchValue(data, 400);
+        return { summary: text, expected: 'Contract match', actual: text, details: [{ message: text }] };
+      }
+      const details = mismatches.map((entry) => {
+        const path = entry?.path != null ? String(entry.path) : undefined;
+        const type = entry?.type != null ? String(entry.type) : undefined;
+        const message = entry?.mismatch != null ? String(entry.mismatch)
+          : entry?.message != null ? String(entry.message) : undefined;
+        const keyDiff = keyListDiff(entry?.expected, entry?.actual);
+        if (keyDiff) {
+          return { path: humanMismatchPath(path, type || 'BodyMismatch', true), expected: keyDiff.expected, actual: keyDiff.actual, message: message || keyDiff.summary, type };
+        }
+        return {
+          path: humanMismatchPath(path, type, false, entry?.expected !== undefined || entry?.actual !== undefined),
+          expected: entry?.expected !== undefined ? formatMismatchValue(entry.expected) : undefined,
+          actual: entry?.actual !== undefined ? formatMismatchValue(entry.actual) : undefined,
+          message,
+          type,
+        };
+      });
+      const first = details[0];
+      const summary = first.message
+        || (first.path ? `${first.type ? `${first.type}: ` : ''}${first.path} expected «${first.expected || '—'}» got «${first.actual || '—'}»` : 'Body or status mismatch');
+      const expected = details.map((d) => (d.path && d.expected !== undefined ? `${d.path}: ${d.expected}` : d.expected || d.message || '')).filter(Boolean).join(' · ') || 'Contract match';
+      const actual = details.map((d) => (d.path && d.actual !== undefined ? `${d.path}: ${d.actual}` : d.actual || '')).filter(Boolean).join(' · ') || summary;
+      return {
+        summary: summary.length > 320 ? `${summary.slice(0, 319)}…` : summary,
+        expected,
+        actual,
+        details,
+      };
+    }
+
+    function isWeakExpected(value) {
+      const text = String(value ?? '').trim();
+      return !text || text === '—' || text === '-' || /^(see mismatch|contract match|matched|pass|failed)$/i.test(text);
+    }
+
+    function looksLikeMismatchBlob(value) {
+      if (value == null) return false;
+      if (typeof value === 'object') return Array.isArray(value?.mismatches) || Array.isArray(value);
+      const text = String(value);
+      return text.includes('"mismatches"') || text.includes('"expected"');
+    }
+
+    function clarifyCompare(item) {
+      if (item.status && item.status !== 'failed') {
+        return {
+          expected: item.expected || 'Matched',
+          actual: item.actual || 'Matched',
+          reason: item.reason || '',
+          details: item.details || [],
+        };
+      }
+      const candidates = [item.reason, item.actual]
+        .filter((c) => looksLikeMismatchBlob(c))
+        .sort((a, b) => String(b).length - String(a).length);
+      const source = candidates[0] || null;
+      if (!source && !isWeakExpected(item.expected)) {
+        return {
+          expected: item.expected || '—',
+          actual: item.actual || item.reason || '—',
+          reason: item.reason || '',
+          details: item.details || [],
+        };
+      }
+      const parsed = parsePactMismatch(source || item.actual || item.reason || '');
+      return {
+        expected: isWeakExpected(item.expected) ? parsed.expected : item.expected,
+        actual: looksLikeMismatchBlob(item.actual) || isWeakExpected(item.actual) ? parsed.actual : (item.actual || parsed.actual),
+        reason: parsed.summary || item.reason || '',
+        details: (item.details && item.details.length) ? item.details : parsed.details,
+      };
+    }
+
+    /** Side-by-side expected/actual cell (failed rows highlight green vs red). */
+    function compareHtml(value, kind, status) {
+      const text = String(value == null || value === '' ? '—' : value);
+      const ok = status === 'passed' || text === 'Matched' || text === '—';
+      const boxClass = ok ? 'ok' : kind;
+      const label = kind === 'expected' ? 'Expected (contract)' : 'Actual (live API)';
+      return `<div class="cmp" title="${escapeHtml(text)}">
+        <span class="cmp-label ${ok ? '' : kind}">${label}</span>
+        <div class="cmp-box ${boxClass}">${escapeHtml(text)}</div>
+      </div>`;
     }
 
     function svcChip(name) {
@@ -1363,17 +1744,22 @@
 
     function getProviderRows() {
       const provider = currentReport?.provider || {};
-      return (provider.interactions || []).map((item) => ({
-        endpoint: item.endpoint || '—',
-        description: item.description || '',
-        status: item.status,
-        expected: item.expected || '—',
-        actual: item.actual || '—',
-        durationMs: item.durationMs ?? 0,
-        pactFile: item.pactFile || '',
-        consumer: item.consumer || '',
-        provider: item.provider || '',
-      }));
+      return (provider.interactions || []).map((item) => {
+        const clarified = clarifyCompare(item);
+        return {
+          endpoint: item.endpoint || '—',
+          description: item.description || '',
+          status: item.status,
+          expected: clarified.expected || '—',
+          actual: clarified.actual || '—',
+          reason: clarified.reason || '',
+          details: clarified.details || [],
+          durationMs: item.durationMs ?? 0,
+          pactFile: item.pactFile || '',
+          consumer: item.consumer || '',
+          provider: item.provider || '',
+        };
+      });
     }
 
     function getCoverageRows() {
@@ -1442,21 +1828,29 @@
       document.getElementById('providerCount').textContent = `Showing ${visible.length} of ${matched.length}${providerPactFilter ? ` · pact ${providerPactFilter}` : ''}`;
       document.getElementById('providerLoadMore').classList.toggle('hidden', visible.length >= matched.length);
 
+      const tableEl = document.getElementById('providerTableEl');
+      tableEl.classList.toggle('failed-focus', filter === 'failed');
+      const legend = document.getElementById('providerCompareLegend');
+      if (legend) legend.classList.toggle('hidden', filter === 'passed');
+
       const providerEmpty =
         provider.ran === false
           ? (provider.skippedReason || 'Provider verification was not run.')
-          : 'No provider interaction details available.';
+          : filter === 'failed'
+            ? 'No failed provider interactions.'
+            : 'No provider interaction details available.';
 
+      const colSpan = filter === 'failed' ? 5 : 6;
       document.getElementById('providerTable').innerHTML = visible.map((item) => `
         <tr class="${item.status === 'failed' ? 'fail-row' : ''}">
           <td>${endpointHtml(item.endpoint)}</td>
-          <td>${escapeHtml(item.description)}</td>
+          <td>${escapeHtml(item.description)}${item.status === 'failed' && item.reason ? `<div class="cmp-hint">${escapeHtml(item.reason)}</div>` : ''}</td>
           <td>${badge(item.status)}</td>
-          <td>${escapeHtml(item.expected)}</td>
-          <td>${escapeHtml(item.actual)}</td>
+          <td>${compareHtml(item.expected, 'expected', item.status)}</td>
+          <td>${compareHtml(item.actual, 'actual', item.status)}</td>
           <td>${durationHtml(item.durationMs, 'provider')}</td>
         </tr>
-      `).join('') || `<tr><td colspan="6">${escapeHtml(providerEmpty)}</td></tr>`;
+      `).join('') || `<tr><td colspan="${colSpan}">${escapeHtml(providerEmpty)}</td></tr>`;
     }
 
     function renderCoverageTable() {
@@ -1932,29 +2326,20 @@ ${sheets.join('\n')}
           phase: 'Consumer',
           name: failure.test,
           endpoint: failure.endpoint || '',
-          expected: '—',
-          actual: failure.reason,
+          expected: 'Pass',
+          actual: failure.reason || 'Failed',
+          status: 'failed',
         });
       }
       for (const failure of provider.failures || []) {
-        const expected = (failure.details || [])
-          .map((detail) => detail.path && detail.expected !== undefined
-            ? `${detail.path}: ${JSON.stringify(detail.expected)}`
-            : detail.message || '')
-          .filter(Boolean)
-          .join('; ') || (failure.expectedStatus ? `HTTP ${failure.expectedStatus}` : '—');
-        const actual = (failure.details || [])
-          .map((detail) => detail.path && detail.actual !== undefined
-            ? `${detail.path}: ${JSON.stringify(detail.actual)}`
-            : '')
-          .filter(Boolean)
-          .join('; ') || failure.reason || '—';
+        const clarified = clarifyCompare({ ...failure, status: 'failed' });
         highlights.push({
           phase: 'Provider',
           name: failure.interaction,
           endpoint: failure.endpoint || '',
-          expected,
-          actual,
+          expected: clarified.expected,
+          actual: clarified.actual,
+          status: 'failed',
         });
       }
 
@@ -1963,12 +2348,12 @@ ${sheets.join('\n')}
         highlightsSection.classList.remove('hidden');
         highlightsSection.open = true;
         document.getElementById('highlightsTable').innerHTML = highlights.map((item) => `
-          <tr>
+          <tr class="fail-row">
             <td>${escapeHtml(item.phase)}</td>
-            <td><code>${escapeHtml(item.endpoint || '—')}</code></td>
+            <td>${endpointHtml(item.endpoint || '—')}</td>
             <td>${escapeHtml(item.name)}</td>
-            <td>${escapeHtml(item.expected || '—')}</td>
-            <td>${escapeHtml(item.actual || '—')}</td>
+            <td>${compareHtml(item.expected, 'expected', 'failed')}</td>
+            <td>${compareHtml(item.actual, 'actual', 'failed')}</td>
           </tr>
         `).join('');
       } else {
@@ -1980,15 +2365,25 @@ ${sheets.join('\n')}
           title: `Consumer: ${failure.test}`,
           endpoint: failure.endpoint || '',
           summary: failure.reason,
-          details: failure.messages?.map((message) => ({ path: 'jest', message })) || [],
+          details: failure.messages?.map((message) => ({ path: 'jest', message, expected: 'Pass', actual: message })) || [],
         })),
-        ...(provider.failures || []).map((failure) => ({
-          title: `Provider: ${failure.interaction}`,
-          endpoint: failure.endpoint || '',
-          fullUrl: failure.fullUrl || '',
-          summary: failure.reason,
-          details: failure.details || [],
-        })),
+        ...(provider.failures || []).map((failure) => {
+          const clarified = clarifyCompare({ ...failure, status: 'failed' });
+          return {
+            title: `Provider: ${failure.interaction}`,
+            endpoint: failure.endpoint || '',
+            fullUrl: failure.fullUrl || '',
+            summary: clarified.reason || failure.reason,
+            details: (clarified.details || []).length
+              ? clarified.details
+              : [{
+                  path: 'mismatch',
+                  expected: clarified.expected || 'Contract match',
+                  actual: clarified.actual || 'Failed',
+                  message: clarified.reason,
+                }],
+          };
+        }),
       ];
 
       const failuresSection = document.getElementById('failuresSection');
@@ -2000,14 +2395,14 @@ ${sheets.join('\n')}
             <h4>${escapeHtml(failure.title)}</h4>
             ${failure.endpoint ? `<p><strong>Endpoint:</strong> <code>${escapeHtml(failure.endpoint)}</code></p>` : ''}
             ${failure.fullUrl ? `<p class="meta">URL: <code>${escapeHtml(failure.fullUrl)}</code></p>` : ''}
-            ${failure.summary ? `<p>${escapeHtml(failure.summary)}</p>` : ''}
+            ${failure.summary ? `<p class="meta"><strong>Summary:</strong> ${escapeHtml(failure.summary)}</p>` : ''}
             <table>
-              <thead><tr><th>Field</th><th>Expected</th><th>Actual</th></tr></thead>
+              <thead><tr><th>Field / path</th><th>Expected (contract)</th><th>Actual (live API)</th></tr></thead>
               <tbody>${(failure.details || []).map((detail) => `
                 <tr>
-                  <td>${escapeHtml(detail.path || (detail.expected !== undefined && detail.actual !== undefined ? 'status' : 'body'))}</td>
-                  <td>${escapeHtml(detail.expected !== undefined ? JSON.stringify(detail.expected) : (detail.message || '—'))}</td>
-                  <td>${escapeHtml(detail.actual !== undefined ? JSON.stringify(detail.actual) : '—')}</td>
+                  <td>${escapeHtml(humanMismatchPath(detail.path, detail.type, /keys:/i.test(String(detail.expected || '')), detail.expected !== undefined || detail.actual !== undefined))}</td>
+                  <td class="exp-cell">${escapeHtml(detail.expected !== undefined && detail.expected !== null ? String(detail.expected) : (detail.message || '—'))}</td>
+                  <td class="act-cell">${escapeHtml(detail.actual !== undefined && detail.actual !== null ? String(detail.actual) : '—')}</td>
                 </tr>
               `).join('') || '<tr><td colspan="3">No detailed mismatch information</td></tr>'}</tbody>
             </table>

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { buildTaxMeshServiceMap, buildServiceMapSvg } from './serviceMap';
 import { packInteractiveDashboardZip } from './dashboardZip';
+import { normalizeReportMismatches, parsePactMismatch } from './mismatchFormat';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
 import { enrichPhaseEndpoints } from './pactEndpointLookup';
 import { loadCoverageRows, writeExcelReport } from './excelReport';
@@ -219,14 +220,22 @@ export function summarizeProviderFromResults(
     const results = block.interactionResults || [];
     if (results.length === 0 && !block.success) {
       failed += 1;
-      const reason = JSON.stringify(block.errors || []).slice(0, 500);
+      const parsed = parsePactMismatch(block.errors?.[0]?.mismatch ?? block.errors);
       interactions.push({
         description: `${block.provider} verification`,
         provider: block.provider,
         status: 'failed',
-        reason,
+        reason: parsed.summary,
+        expected: parsed.expected,
+        actual: parsed.actual,
       });
-      failures.push({ interaction: block.provider, reason });
+      failures.push({
+        interaction: block.provider,
+        reason: parsed.summary,
+        expected: parsed.expected,
+        actual: parsed.actual,
+        details: parsed.details,
+      });
       continue;
     }
     for (const r of results) {
@@ -236,19 +245,29 @@ export function summarizeProviderFromResults(
       const err = (block.errors || []).find((e) =>
         String(e.interaction || '').includes(r.description)
       );
-      const reason = err ? JSON.stringify(err.mismatch || err).slice(0, 500) : undefined;
+      const parsed = !ok
+        ? parsePactMismatch(err?.mismatch ?? err ?? r.description)
+        : null;
+      const endpoint = parseEndpoint(r.description);
       interactions.push({
         description: r.description,
         provider: block.provider,
-        endpoint: parseEndpoint(r.description),
+        endpoint,
         status: ok ? 'passed' : 'failed',
         durationMs: r.duration ? Number(String(r.duration).replace(/ms/, '')) || 0 : 0,
-        reason,
-        expected: ok ? 'Matched' : 'See mismatch',
-        actual: ok ? 'Matched' : reason?.slice(0, 120),
+        reason: parsed?.summary,
+        expected: ok ? 'Matched' : parsed?.expected || 'Contract match',
+        actual: ok ? 'Matched' : parsed?.actual || parsed?.summary || 'Failed',
       });
-      if (!ok) {
-        failures.push({ interaction: r.description, reason });
+      if (!ok && parsed) {
+        failures.push({
+          interaction: r.description,
+          endpoint,
+          reason: parsed.summary,
+          expected: parsed.expected,
+          actual: parsed.actual,
+          details: parsed.details,
+        });
       }
     }
   }
@@ -670,35 +689,37 @@ export function buildReport(input: {
   const provider = enrichPhaseEndpoints(input.provider, pactsDir);
   const serviceMap = buildTaxMeshServiceMap(consumer, provider);
 
-  return attachCoverage({
-    generatedAt: new Date().toISOString(),
-    project: 'TaxMesh Pact Contract Tests',
-    overallStatus,
-    consumer,
-    provider,
-    pactFiles: input.pactFiles,
-    serviceMap,
-    phases: {
-      consumer: {
-        ran: consumer.ran,
-        status: consumer.status,
-        passed: consumer.passed,
-        total: consumer.total,
-        failed: consumer.failed,
-        label: consumer.label,
+  return normalizeReportMismatches(
+    attachCoverage({
+      generatedAt: new Date().toISOString(),
+      project: 'TaxMesh Pact Contract Tests',
+      overallStatus,
+      consumer,
+      provider,
+      pactFiles: input.pactFiles,
+      serviceMap,
+      phases: {
+        consumer: {
+          ran: consumer.ran,
+          status: consumer.status,
+          passed: consumer.passed,
+          total: consumer.total,
+          failed: consumer.failed,
+          label: consumer.label,
+        },
+        provider: {
+          ran: provider.ran,
+          status: provider.status,
+          passed: provider.passed,
+          total: provider.total,
+          failed: provider.failed,
+          label: provider.label,
+          providerBaseUrl: provider.providerBaseUrl,
+        },
       },
-      provider: {
-        ran: provider.ran,
-        status: provider.status,
-        passed: provider.passed,
-        total: provider.total,
-        failed: provider.failed,
-        label: provider.label,
-        providerBaseUrl: provider.providerBaseUrl,
-      },
-    },
-    environment: input.environment || {},
-  });
+      environment: input.environment || {},
+    })
+  );
 }
 
 export async function writeReports(report: PactReport): Promise<{

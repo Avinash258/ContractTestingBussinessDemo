@@ -1,0 +1,9 @@
+{
+  "request": {
+    "status": "Completed"
+  },
+  "response": {
+    "apiVersion": 2,
+    "error": "Provide at least one of: entityName, taxYear, dueDate, formType, jurisdiction, states"
+  }
+}

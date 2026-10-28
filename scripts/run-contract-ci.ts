@@ -43,8 +43,8 @@ const ALL_PROVIDERS: Array<ServiceId | 'Gateway'> = [
 
 /** Consumer Jest path fragments that exercise a given service pair / producer. */
 const CONSUMER_SPEC_FRAGMENTS: Record<string, string[]> = {
-  CLM: ['clm-mdm.ct00'],
-  MDM: ['clm-mdm.ct00'],
+  CLM: ['clm-mdm.ct00', 'clm-v2'],
+  MDM: ['clm-mdm.ct00', 'clm-v2'],
   ACC: ['mdm-acc.ct01', 'all-contracts.ct05-17'],
   TAX: ['mdm-tax.ct02', 'all-contracts.ct05-17'],
   ALC: ['mdm-alc.ct03', 'all-contracts.ct05-17'],
@@ -103,13 +103,13 @@ function consumerTestPathPattern(): string {
       fragments.add(frag);
     }
   }
-  // CLM+MDM without --full-consumer → CT-00 only
+  // CLM+MDM without --full-consumer → CT-00 + CLM v2 only
   if (
     selectedServices.length === 2 &&
     selectedServices.includes('CLM') &&
     selectedServices.includes('MDM')
   ) {
-    return 'clm-mdm.ct00';
+    return 'clm-mdm.ct00|clm-v2';
   }
   return Array.from(fragments).join('|') || 'tests/consumer';
 }
@@ -179,27 +179,7 @@ function listPactFiles(): string[] {
   });
 }
 
-/**
- * Wipe `pacts/` before consumer regenerate only when a full rewrite is intended.
- *
- * - all-services (no --services): clear — avoids stale interactions merging into pact files
- * - --full-consumer: clear — regenerates every consumer pact from scratch
- * - scoped --services=X,Y without --full-consumer: do **not** clear — keep sibling
- *   pact files so provider verify can still use previously generated contracts
- *   (e.g. ACC→MDM) for the selected providers
- * - --provider-only: never reaches here (runConsumer is skipped)
- */
 function clearPactsDirBeforeConsumer() {
-  const shouldClear = fullConsumer || !scopedRun;
-  if (!shouldClear) {
-    console.log(
-      `Preserving existing pact files (scoped ${selectedServices!.join(
-        ','
-      )} without --full-consumer)`
-    );
-    return;
-  }
-
   const dir = config.pactsDir;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -210,7 +190,7 @@ function clearPactsDirBeforeConsumer() {
   }
   console.log(
     `Cleared previous pact files in ${dir} (${
-      fullConsumer ? 'full-consumer' : 'all-services'
+      fullConsumer ? 'full-consumer' : scopedRun ? 'scoped' : 'all-services'
     } run)`
   );
 }
@@ -227,9 +207,11 @@ function runConsumer(): { exitCode: number; results: any | null } {
       );
     }
     console.log(`Jest testPathPatterns: ${pattern}\n`);
+    clearPactsDirBeforeConsumer();
   } else if (scopedRun) {
     console.log(`Scoped services: ${selectedServices!.join(', ')}`);
     console.log(`Jest testPathPatterns: ${pattern}\n`);
+    clearPactsDirBeforeConsumer();
   } else {
     console.log('Mode: all services (full consumer + all providers)\n');
   }

@@ -336,9 +336,14 @@ function classifyOp(
   // Service-path equivalence for literal proxy paths without params
   const proxy = op.path.match(/^\/api\/proxy\/(CLM|MDM|ACC|TAX|ALC|DOC)(\/.*)$/);
   if (proxy) {
+    const svc = proxy[1];
     const servicePath = proxy[2];
-    const svcEvidence = evidence.get(opKey(op.method, servicePath));
-    if (svcEvidence?.length) {
+    // Bare service paths (e.g. /v2/status) exist on several services; only accept
+    // evidence tied to this service. Pact files already add exact proxy-equiv keys.
+    const svcEvidence = (evidence.get(opKey(op.method, servicePath)) || []).filter(
+      (s) => s === `catalog:service-path:${svc}`
+    );
+    if (svcEvidence.length) {
       return {
         ...op,
         status: 'covered',

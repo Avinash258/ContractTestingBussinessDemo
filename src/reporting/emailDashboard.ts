@@ -3,6 +3,7 @@
  * No JavaScript — works in Outlook / Gmail body.
  */
 import type { PactReport, ServiceMapNode } from './types';
+import { normalizeReportMismatches, parsePactMismatch } from './mismatchFormat';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -147,8 +148,38 @@ function buildEndpointTable(
     </div>`;
 }
 
+function clarifyFailureSide(item: {
+  expected?: string;
+  actual?: string;
+  reason?: string;
+}): { expected: string; actual: string; summary: string } {
+  const candidates = [item.reason, item.actual]
+    .filter((c) => c && (String(c).includes('"mismatches"') || String(c).includes('"expected"')))
+    .sort((a, b) => String(b).length - String(a).length);
+  const source = candidates[0] || null;
+  const weak =
+    !item.expected ||
+    /^(—|-|see mismatch|contract match)$/i.test(String(item.expected).trim());
+  if (source || weak) {
+    const parsed = parsePactMismatch(source || item.actual || item.reason || '');
+    return {
+      expected: weak ? parsed.expected : String(item.expected),
+      actual:
+        !item.actual || String(item.actual).includes('"mismatches"')
+          ? parsed.actual
+          : String(item.actual),
+      summary: parsed.summary || item.reason || '—',
+    };
+  }
+  return {
+    expected: item.expected || '—',
+    actual: item.actual || item.reason || '—',
+    summary: item.reason || '—',
+  };
+}
+
 export function buildEmailDashboardBody(
-  report: PactReport,
+  reportInput: PactReport,
   options: {
     buildId?: string;
     buildUrl?: string;
@@ -157,6 +188,7 @@ export function buildEmailDashboardBody(
     compact?: boolean;
   } = {}
 ): string {
+  const report = normalizeReportMismatches(reportInput);
   const compact = options.compact !== false;
   const consumer = report.consumer || ({} as PactReport['consumer']);
   const provider = report.provider || ({} as PactReport['provider']);
@@ -193,22 +225,52 @@ export function buildEmailDashboardBody(
 
   const topology = buildTopologyTable(report.serviceMap);
 
-  const failedProviderRows = (provider.interactions || [])
-    .filter((item) => item.status === 'failed')
+  const failedProviderRows = (provider.failures || [])
+    .map((item) => {
+      const clarified = clarifyFailureSide(item);
+      return {
+        endpoint: item.endpoint || '—',
+        description: item.interaction || '—',
+        summary: clarified.summary,
+        expected: clarified.expected,
+        actual: clarified.actual,
+      };
+    })
+    .concat(
+      // Fallback if failures[] empty but interactions mark failed
+      !(provider.failures || []).length
+        ? (provider.interactions || [])
+            .filter((item) => item.status === 'failed')
+            .map((item) => {
+              const clarified = clarifyFailureSide(item);
+              return {
+                endpoint: item.endpoint || '—',
+                description: item.description || '—',
+                summary: clarified.summary,
+                expected: clarified.expected,
+                actual: clarified.actual,
+              };
+            })
+        : []
+    );
+
+  const failedConsumerRows = (consumer.failures || [])
     .map((item) => ({
       endpoint: item.endpoint || '—',
-      description: item.description || '—',
-      expected: item.expected || '—',
-      actual: item.actual || item.reason || '—',
-    }));
-
-  const failedConsumerRows = (consumer.tests || consumer.interactions || [])
-    .filter((test: any) => test.status === 'failed')
-    .map((test: any) => ({
-      endpoint: test.endpoint || '—',
-      name: test.name || test.description || '—',
-      reason: test.reason || '-',
-    }));
+      name: item.test || '—',
+      reason: item.reason || '—',
+    }))
+    .concat(
+      !(consumer.failures || []).length
+        ? (consumer.tests || consumer.interactions || [])
+            .filter((test: any) => test.status === 'failed')
+            .map((test: any) => ({
+              endpoint: test.endpoint || '—',
+              name: test.name || test.description || '—',
+              reason: test.reason || '—',
+            }))
+        : []
+    );
 
   const cov = report.coverage || {};
   const consumerGaps = cov.gaps?.consumer || [];
@@ -217,21 +279,43 @@ export function buildEmailDashboardBody(
   const isFailReport =
     overall === 'failed' || hasGaps || overallFailed > 0;
 
+  const expectedCell = (value: unknown) =>
+    `<div style="font-size:10px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px">Expected (contract)</div>
+     <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.35;white-space:pre-wrap;word-break:break-word;padding:8px;border-radius:6px;border:1px solid #86efac;background:#f0fdf4;color:#14532d">${escapeHtml(value)}</div>`;
+
+  const actualCell = (value: unknown) =>
+    `<div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;margin-bottom:4px">Actual (live API)</div>
+     <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.35;white-space:pre-wrap;word-break:break-word;padding:8px;border-radius:6px;border:1px solid #fca5a5;background:#fef2f2;color:#7f1d1d">${escapeHtml(value)}</div>`;
+
   const failureSection = compact
     ? [
         failedProviderRows.length
-          ? buildEndpointTable('Provider failures', failedProviderRows, [
-              { label: 'Endpoint', render: (r) => escapeHtml(r.endpoint) },
-              { label: 'Expected', render: (r) => escapeHtml(r.expected) },
-              { label: 'Actual', render: (r) => escapeHtml(r.actual) },
-            ])
+          ? buildEndpointTable(
+              `Provider failures (${failedProviderRows.length}) — expected vs actual`,
+              failedProviderRows.slice(0, 12),
+              [
+                {
+                  label: 'Endpoint / interaction',
+                  render: (r) =>
+                    `<div style="font-weight:600">${escapeHtml(r.endpoint)}</div>
+                     <div style="color:#6b7280;margin-top:4px">${escapeHtml(r.description)}</div>
+                     <div style="color:#92400e;margin-top:6px;font-size:11px">${escapeHtml(r.summary)}</div>`,
+                },
+                { label: 'Expected', render: (r) => expectedCell(r.expected) },
+                { label: 'Actual', render: (r) => actualCell(r.actual) },
+              ]
+            )
           : '',
         failedConsumerRows.length
-          ? buildEndpointTable('Consumer failures', failedConsumerRows, [
-              { label: 'Endpoint', render: (r) => escapeHtml(r.endpoint) },
-              { label: 'Test', render: (r) => escapeHtml(r.name) },
-              { label: 'Reason', render: (r) => escapeHtml(r.reason) },
-            ])
+          ? buildEndpointTable(
+              `Consumer failures (${failedConsumerRows.length})`,
+              failedConsumerRows.slice(0, 12),
+              [
+                { label: 'Endpoint', render: (r) => escapeHtml(r.endpoint) },
+                { label: 'Test', render: (r) => escapeHtml(r.name) },
+                { label: 'Why it failed', render: (r) => actualCell(r.reason) },
+              ]
+            )
           : '',
       ].join('')
     : '';
@@ -281,18 +365,36 @@ export function buildEmailDashboardBody(
       : '',
   ].join('');
 
+  const howToRead = isFailReport
+    ? `<div style="margin:0 0 16px;padding:12px 14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+        <p style="margin:0;font-size:13px;font-weight:700;color:#92400e">How to read Expected vs Actual</p>
+        <p style="margin:6px 0 0;font-size:12px;color:#78350f;line-height:1.45">
+          <strong style="color:#166534">Expected (contract)</strong> is what the Pact file required.
+          <strong style="color:#991b1b">Actual (live API)</strong> is what the service returned during provider verify.
+          Open the attached dashboard for full field-level mismatch tables.
+        </p>
+      </div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:16px;background:#ffffff;font-family:Segoe UI,sans-serif;color:#1f2937">
-  <div style="max-width:720px;margin:0 auto">
+<body style="margin:0;padding:16px;background:#f8fafc;font-family:Segoe UI,sans-serif;color:#1f2937">
+  <div style="max-width:780px;margin:0 auto">
     ${gapBanner}
+    ${howToRead}
     <div style="padding:20px;border:1px solid ${isFailReport ? '#fecaca' : '#dbe3ef'};border-radius:12px;background:${isFailReport ? '#fff5f5' : '#ffffff'};margin-bottom:16px">
       <p style="margin:0;font-size:20px;font-weight:700">TaxMesh Contract Test Report${isFailReport ? ' — FAIL' : ''}</p>
       <p style="margin:6px 0 0;font-size:13px;color:#6b7280">
         Target ${escapeHtml(targetUrl)}
         · Generated ${escapeHtml(report.generatedAt || '')}
+        ${env.PACT_SERVICES || env.RUN_MODE ? ` · Scope ${escapeHtml(String(env.PACT_SERVICES || env.RUN_MODE))}` : ''}
       </p>
       <p style="margin:12px 0 0;font-size:24px;font-weight:800;color:${isFailReport ? '#991b1b' : overallColor}">${escapeHtml((isFailReport ? 'failed' : overall).toUpperCase())}</p>
+      <p style="margin:8px 0 0;font-size:13px;color:#6b7280">
+        Failed interactions: <strong style="color:#991b1b">${overallFailed}</strong>
+        · Passed: <strong style="color:#166534">${overallPassed}</strong>
+        · Total: <strong>${overallTotal}</strong>
+      </p>
       ${artifactLinks ? `<p style="margin:12px 0 0;font-size:13px">${artifactLinks}</p>` : ''}
     </div>
 
@@ -311,12 +413,15 @@ export function buildEmailDashboardBody(
 
     <div style="margin:16px 0;padding:14px 16px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff">
       <p style="margin:0;font-size:14px;font-weight:700;color:#1d4ed8">Interactive dashboard + Excel</p>
-      <p style="margin:8px 0 0;font-size:13px;color:#1e40af">
-        Unzip <strong>TaxMesh-Contract-Dashboard.zip</strong>, then open <strong>index.html</strong> in your browser.
-        Use Expand/Collapse, filters, Load more, and Download Excel. A multi-sheet <strong>TaxMesh-Contract-Report.xlsx</strong> is also attached when available.
+      <p style="margin:8px 0 0;font-size:13px;color:#1e40af;line-height:1.45">
+        1. Unzip <strong>TaxMesh-Contract-Dashboard.zip</strong><br/>
+        2. Open <strong>index.html</strong> (use filter <em>Failed</em> on Provider)<br/>
+        3. Compare green <strong>Expected</strong> vs red <strong>Actual</strong> cells<br/>
+        4. Optional: open the multi-sheet <strong>TaxMesh-Contract-Report.xlsx</strong> attachment
       </p>
     </div>
 
+    <p style="margin:8px 0 0;font-size:11px;color:#9ca3af;text-align:center">TaxMesh Pact contract pipeline · do not reply to this automated message</p>
   </div>
 </body></html>`;
 }

@@ -37,7 +37,15 @@ export interface PhaseSummary {
     interaction?: string;
     endpoint?: string;
     reason?: string;
-    details?: Array<{ path?: string; expected?: string; actual?: string }>;
+    expected?: string;
+    actual?: string;
+    details?: Array<{
+      path?: string;
+      expected?: string;
+      actual?: string;
+      message?: string;
+      type?: string;
+    }>;
   }>;
   ran: boolean;
   providerBaseUrl?: string;
