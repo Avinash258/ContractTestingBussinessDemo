@@ -19,12 +19,11 @@ export const config = {
   /**
    * Per-service provider base URL (Swagger /api-docs).
    * Gateway catalog: GET {GATEWAY}/api/contracts  (operationId: listContracts)
-   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/�
-   * @see https://marco-absolute-map-mailto.trycloudflare.com/api-docs#/Gateway/listContracts
+   * Service proxy:   GET {GATEWAY}/api/proxy/{CLM|MDM|ACC|TAX|ALC|DOC}/…
    *
    * - URL_CLM / CLM_BASE_URL etc. win when set
-   * - Else if GATEWAY_* env set ? `{GATEWAY}/api/proxy/{SERVICE_ID}`
-   * - Else local direct ports 4101�4106 (tunnel from gateway.config.json is for CI/Swagger)
+   * - Else PACT_USE_LOCAL_PORTS=1 → direct http://127.0.0.1:4101–4106
+   * - Else `{gateway.config.json}/api/proxy/{SERVICE_ID}` (same host as CI / Swagger)
    */
   serviceBaseUrl(serviceId: ServiceId): string {
     const envKey = `URL_${serviceId}`;
@@ -32,17 +31,14 @@ export const config = {
     const explicit = process.env[envKey] || process.env[alt];
     if (explicit) return explicit.replace(/\/$/, '');
 
-    const hasGatewayEnv = Boolean(
-      process.env.GATEWAY_BASE_URL ||
-        process.env.TAXMESH_BASE_URL ||
-        process.env.PACT_PROVIDER_URL
+    const useLocalPorts = /^(1|true|yes)$/i.test(
+      String(process.env.PACT_USE_LOCAL_PORTS || '')
     );
-
-    if (hasGatewayEnv) {
-      return `${resolveGatewayBaseUrl()}/api/proxy/${serviceId}`;
+    if (useLocalPorts) {
+      return `http://127.0.0.1:${SERVICES[serviceId].port}`;
     }
 
-    return `http://127.0.0.1:${SERVICES[serviceId].port}`;
+    return `${resolveGatewayBaseUrl()}/api/proxy/${serviceId}`;
   },
 
   // Back-compat for earlier CLM?MDM helpers

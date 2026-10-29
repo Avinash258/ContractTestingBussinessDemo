@@ -1,5 +1,11 @@
+/**
+ * Local provider runner — same gateway resolution as CI.
+ * Base URLs come from gateway.config.json → /api/proxy/{SERVICE}.
+ */
 import { spawnSync } from 'child_process';
 import path from 'path';
+import { resolveGatewayBaseUrl } from '../../src/gatewayConfig';
+import { config } from '../../src/config';
 
 const runners = [
   'clm.provider.verify.ts',
@@ -11,6 +17,23 @@ const runners = [
   'gateway.provider.verify.ts',
 ];
 
+const gateway = resolveGatewayBaseUrl();
+const childEnv = {
+  ...process.env,
+  // Force CI-parity: children use gateway.config.json host, not stale shell vars / :4101
+  GATEWAY_BASE_URL: gateway,
+  TAXMESH_BASE_URL: gateway,
+  PACT_PROVIDER_URL: gateway,
+  PACT_USE_LOCAL_PORTS: '',
+};
+
+console.log('\n=== TaxMesh provider verification (local) ===');
+console.log(`Gateway (gateway.config.json): ${gateway}`);
+console.log(`  CLM proxy : ${config.serviceBaseUrl('CLM')}`);
+console.log(`  MDM proxy : ${config.serviceBaseUrl('MDM')}`);
+console.log(`  Gateway   : ${config.gatewayBaseUrl}`);
+console.log('');
+
 let failed = false;
 
 for (const file of runners) {
@@ -19,7 +42,11 @@ for (const file of runners) {
   const result = spawnSync(
     process.execPath,
     [require.resolve('ts-node/dist/bin.js'), '--transpile-only', full],
-    { stdio: 'inherit', cwd: process.cwd() }
+    {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      env: childEnv,
+    }
   );
   if (result.status !== 0) failed = true;
 }

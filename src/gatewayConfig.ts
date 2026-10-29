@@ -46,20 +46,24 @@ export function readGatewayFileConfig(
 }
 
 /**
- * Resolve TaxMesh gateway origin.
- * Priority: env override → gateway.config.json → localFallback → :4100
+ * Resolve TaxMesh gateway origin (dynamic from gateway.config.json).
+ *
+ * Priority:
+ * 1. GATEWAY_BASE_URL_OVERRIDE — one-off (ADO Run pipeline / local)
+ * 2. gateway.config.json → gatewayBaseUrl  ← source of truth
+ * 3. GATEWAY_ALLOW_ENV=1 + GATEWAY_BASE_URL / TAXMESH_BASE_URL / PACT_PROVIDER_URL
+ * 4. localFallback / http://127.0.0.1:4100
+ *
+ * Stale shell/library GATEWAY_BASE_URL is ignored unless GATEWAY_ALLOW_ENV=1.
  */
 export function resolveGatewayBaseUrl(options?: {
   preferLocal?: boolean;
   configPath?: string;
 }): string {
-  const fromEnv = normalizeGatewayOrigin(
-    process.env.GATEWAY_BASE_URL ||
-      process.env.TAXMESH_BASE_URL ||
-      process.env.PACT_PROVIDER_URL ||
-      ''
+  const override = normalizeGatewayOrigin(
+    process.env.GATEWAY_BASE_URL_OVERRIDE || ''
   );
-  if (fromEnv) return fromEnv;
+  if (override) return override;
 
   const file = readGatewayFileConfig(options?.configPath);
   if (options?.preferLocal) {
@@ -69,7 +73,27 @@ export function resolveGatewayBaseUrl(options?: {
   }
 
   const fromFile = normalizeGatewayOrigin(file.gatewayBaseUrl);
+  const allowEnv = /^(1|true|yes)$/i.test(
+    String(process.env.GATEWAY_ALLOW_ENV || '')
+  );
+  const fromEnv = normalizeGatewayOrigin(
+    process.env.GATEWAY_BASE_URL ||
+      process.env.TAXMESH_BASE_URL ||
+      process.env.PACT_PROVIDER_URL ||
+      ''
+  );
+
+  if (allowEnv && fromEnv) return fromEnv;
+
+  if (fromEnv && fromFile && fromEnv !== fromFile) {
+    console.warn(
+      `[gateway] Ignoring env gateway ${fromEnv} — using gateway.config.json → ${fromFile}`
+    );
+  }
+
   if (fromFile) return fromFile;
+
+  if (fromEnv) return fromEnv;
 
   return normalizeGatewayOrigin(
     file.localFallback || 'http://127.0.0.1:4100'

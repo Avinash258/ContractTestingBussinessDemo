@@ -48,16 +48,19 @@ function resolve(adoMode) {
     return { url: override, source: 'GATEWAY_BASE_URL_OVERRIDE (pipeline UI)' };
   }
 
-  // In ADO, ignore stale library vars (GATEWAY_BASE_URL / TAXMESH_BASE_URL / …).
-  // Locally, keep env overrides for developer convenience.
-  if (!adoMode) {
+  // gateway.config.json is the source of truth (local + ADO).
+  // Ambient GATEWAY_BASE_URL is ignored unless GATEWAY_ALLOW_ENV=1.
+  const allowEnv = /^(1|true|yes)$/i.test(
+    String(process.env.GATEWAY_ALLOW_ENV || '')
+  );
+  if (allowEnv && !adoMode) {
     const fromEnv = normalize(
       process.env.GATEWAY_BASE_URL ||
         process.env.TAXMESH_BASE_URL ||
         process.env.PACT_PROVIDER_URL ||
         ''
     );
-    if (fromEnv) return { url: fromEnv, source: 'env' };
+    if (fromEnv) return { url: fromEnv, source: 'env (GATEWAY_ALLOW_ENV)' };
   }
 
   return fromConfig();

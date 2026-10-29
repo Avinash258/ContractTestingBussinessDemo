@@ -19,10 +19,24 @@ import {
   writeReports,
 } from '../src/reporting/generateReport';
 import { config } from '../src/config';
+import { resolveGatewayBaseUrl } from '../src/gatewayConfig';
 import { SERVICES, type ServiceId } from '../src/catalog/contracts';
 import { hasPactFilesForProvider } from '../src/pact/listPacts';
 
 const root = process.cwd();
+
+/** Same as CI: pin GATEWAY_* from gateway.config.json for provider child processes. */
+function ensureGatewayEnvFromConfig(): string {
+  const gateway = resolveGatewayBaseUrl();
+  process.env.GATEWAY_BASE_URL = gateway;
+  process.env.TAXMESH_BASE_URL = gateway;
+  process.env.PACT_PROVIDER_URL = gateway;
+  // Local ports must not win over gateway proxy unless explicitly requested
+  if (!/^(1|true|yes)$/i.test(String(process.env.PACT_USE_LOCAL_PORTS || ''))) {
+    delete process.env.PACT_USE_LOCAL_PORTS;
+  }
+  return gateway;
+}
 const reportsDir = ensureReportsDir();
 const consumerOnly = process.argv.includes('--consumer-only');
 const providerOnly = process.argv.includes('--provider-only');
@@ -324,6 +338,12 @@ function runProviders() {
 
 async function main() {
   ensureReportsDir();
+
+  const gateway = ensureGatewayEnvFromConfig();
+  console.log(`\nGateway under test (gateway.config.json): ${gateway}`);
+  if (!consumerOnly) {
+    console.log(`  Provider proxies: ${gateway}/api/proxy/{CLM|MDM|…}`);
+  }
 
   let consumerExit = 0;
   let consumerResults: any = null;

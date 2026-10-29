@@ -12,6 +12,7 @@ export async function verifyProvider(opts: {
 
   console.log(`TaxMesh provider verification: ${opts.provider}`);
   console.log(`  baseUrl      : ${opts.baseUrl}`);
+  console.log(`  (from gateway.config.json unless URL_* / OVERRIDE / PACT_USE_LOCAL_PORTS)`);
   console.log(
     `  pact files   : ${pactUrls.map((p) => path.basename(p)).join(', ')}`
   );
