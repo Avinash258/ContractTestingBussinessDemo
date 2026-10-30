@@ -20,6 +20,7 @@ import {
   resolveSwaggerUiUrl,
   runCoverageAudit,
 } from '../src/swagger/coverageAudit';
+import { appendCoverageHistory } from '../src/swagger/coverageHistory';
 import { normalizeGatewayOrigin } from '../src/gatewayConfig';
 
 const failOnGap =
@@ -51,17 +52,36 @@ async function main() {
   const jsonPath = path.join(reportsDir, 'swagger-coverage.json');
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf8');
 
+  const historyEntry = appendCoverageHistory(report);
+  const historyFile = path.join(reportsDir, 'swagger-coverage-history.jsonl');
+  const slimFile = path.join(reportsDir, 'swagger-coverage-latest-slim.json');
+
   console.log(`Ops      : ${report.totals.ops}`);
   console.log(`Covered  : ${report.totals.covered}`);
   console.log(`Partial  : ${report.totals.partial}`);
   console.log(`Missing  : ${report.totals.missing}`);
+  console.log(`Mismatch : ${report.totals.mismatch}`);
   console.log(`Deferred : ${report.totals.deferred}`);
   console.log(`Report   : ${jsonPath}`);
+  console.log(`History  : ${historyFile} (slim latest: ${slimFile})`);
+  if (historyEntry.deltaVsPrevious) {
+    const d = historyEntry.deltaVsPrevious;
+    console.log(
+      `Delta    : missing +${d.missingAdded.length}/-${d.missingRemoved.length}, mismatch +${d.mismatchAdded.length}/-${d.mismatchRemoved.length}`
+    );
+  }
 
   if (report.missing.length) {
     console.log('\nMissing operations:');
     for (const row of report.missing) {
-      console.log(`  ${row.method} ${row.path}`);
+      console.log(`  ${row.method} ${row.path}${row.note ? ` — ${row.note}` : ''}`);
+    }
+  }
+
+  if (report.mismatches.length) {
+    console.log('\nMismatch operations (stub/wrong-shape pact):');
+    for (const row of report.mismatches) {
+      console.log(`  ${row.method} ${row.path}${row.note ? ` — ${row.note}` : ''}`);
     }
   }
 

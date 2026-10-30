@@ -50,7 +50,12 @@ const DEFERRED_NOTES: Array<{ method: string; pathPattern: RegExp; note: string 
     },
   ];
 
-export type CoverageStatus = 'covered' | 'partial' | 'missing' | 'deferred';
+export type CoverageStatus =
+  | 'covered'
+  | 'partial'
+  | 'missing'
+  | 'mismatch'
+  | 'deferred';
 
 export interface SwaggerOp {
   method: string;
@@ -75,10 +80,14 @@ export interface CoverageReport {
     covered: number;
     partial: number;
     missing: number;
+    /** Stub/wrong-shape written pact for an OpenAPI op (may overlap with missing). */
+    mismatch: number;
     deferred: number;
   };
   rows: CoverageRow[];
   missing: CoverageRow[];
+  /** Ops with a stub or shape-wrong pact; counted in totals.mismatch (can overlap missing). */
+  mismatches: CoverageRow[];
   deferred: CoverageRow[];
 }
 
@@ -163,18 +172,33 @@ export function listOpenApiOps(doc: any): SwaggerOp[] {
   return ops.sort((a, b) => opKey(a.method, a.path).localeCompare(opKey(b.method, b.path)));
 }
 
+export interface CoverageEvidence {
+  /** Real (non-stub) METHOD+path ? source labels. */
+  evidence: Map<string, string[]>;
+  /** Stub-only METHOD+path ? source labels (does not cover; feeds mismatch). */
+  stubs: Map<string, string[]>;
+}
+
 /** Concrete METHOD + path pairs we treat as evidence of coverage. */
 export function collectCoveredConcrete(opts: {
   pactsDir: string;
   consumerDir: string;
-}): Map<string, string[]> {
+}): CoverageEvidence {
   const evidence = new Map<string, string[]>();
+  const stubs = new Map<string, string[]>();
 
   const add = (method: string, p: string, source: string) => {
     const key = opKey(method, p);
     const list = evidence.get(key) || [];
     if (!list.includes(source)) list.push(source);
     evidence.set(key, list);
+  };
+
+  const addStub = (method: string, p: string, source: string) => {
+    const key = opKey(method, p);
+    const list = stubs.get(key) || [];
+    if (!list.includes(source)) list.push(source);
+    stubs.set(key, list);
   };
 
   // --- Catalog-derived (always available, no pact files required) ---
@@ -288,6 +312,7 @@ export function collectCoveredConcrete(opts: {
           provider?: { name?: string };
           interactions?: Array<{
             request?: { method?: string; path?: string };
+            response?: { body?: unknown };
           }>;
         };
         const provider = pact.provider?.name || '';
@@ -298,6 +323,19 @@ export function collectCoveredConcrete(opts: {
           const method = (ix.request?.method || 'GET').toUpperCase();
           const reqPath = ix.request?.path;
           if (!reqPath) continue;
+          // Stub-only bodies (e.g. { isReady: true }) do NOT count as coverage ?
+          // track as stub ? missing + mismatch until a real contract exists.
+          if (isStubPactBody(ix.response?.body)) {
+            addStub(method, reqPath, `pact-stub:${file}`);
+            if (svc && !reqPath.startsWith('/api/')) {
+              addStub(
+                method,
+                `/api/proxy/${svc}${reqPath}`,
+                `pact-stub:${file}:proxy-equiv`
+              );
+            }
+            continue;
+          }
           add(method, reqPath, `pact:${file}`);
           if (svc && !reqPath.startsWith('/api/')) {
             add(method, `/api/proxy/${svc}${reqPath}`, `pact:${file}:proxy-equiv`);
@@ -309,7 +347,55 @@ export function collectCoveredConcrete(opts: {
     }
   }
 
-  return evidence;
+  return { evidence, stubs };
+}
+
+function stubSourcesForOp(
+  op: SwaggerOp,
+  stubs: Map<string, string[]>
+): string[] {
+  const exact = stubs.get(opKey(op.method, op.path));
+  if (exact?.length) return exact;
+  const re = pathTemplateRegex(op.path);
+  const matches: string[] = [];
+  for (const [key, sources] of stubs) {
+    const sp = key.indexOf(' ');
+    const method = key.slice(0, sp);
+    const p = key.slice(sp + 1);
+    if (method !== op.method) continue;
+    if (re.test(p)) {
+      for (const s of sources) matches.push(`${s} (${p})`);
+    }
+  }
+  return matches;
+}
+
+/** Unwrap Pact V3/V4 response body to plain JSON contents. */
+function unwrapPactResponseBody(body: unknown): unknown {
+  if (!body || typeof body !== 'object') return body;
+  const b = body as Record<string, unknown>;
+  if ('content' in b && ('contentType' in b || 'encoded' in b)) {
+    return b.content;
+  }
+  return body;
+}
+
+/**
+ * Trivial placeholder contracts that must not mark Swagger ops as covered.
+ * Example: Gateway v2 stubs that only assert `{ isReady: true }`.
+ */
+export function isStubPactBody(body: unknown): boolean {
+  const contents = unwrapPactResponseBody(body);
+  if (!contents || typeof contents !== 'object' || Array.isArray(contents)) {
+    return false;
+  }
+  const keys = Object.keys(contents as object);
+  if (keys.length === 1 && keys[0] === 'isReady') return true;
+  if (keys.length === 1 && keys[0] === 'ready' && typeof (contents as any).ready === 'boolean') {
+    // bare { ready: true } with no other fields is still a stub for rich v2 payloads
+    return true;
+  }
+  return false;
 }
 
 function walkTsFiles(
@@ -443,7 +529,7 @@ export async function runCoverageAudit(
   const consumerDir =
     options.consumerDir || path.resolve(process.cwd(), 'tests/consumer');
 
-  const evidence = collectCoveredConcrete({ pactsDir, consumerDir });
+  const { evidence, stubs } = collectCoveredConcrete({ pactsDir, consumerDir });
   const ops = listOpenApiOps(doc);
   const treatUploadAsDeferred = options.treatUploadAsDeferred !== false;
 
@@ -451,11 +537,42 @@ export async function runCoverageAudit(
     classifyOp(op, evidence, treatUploadAsDeferred)
   );
 
+  // Stub pact present but op not correctly covered ? count as missing AND mismatch
+  const mismatches: CoverageRow[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.status === 'covered' || row.status === 'partial' || row.status === 'deferred') {
+      continue;
+    }
+    const stubEv = stubSourcesForOp(row, stubs);
+    if (!stubEv.length) continue;
+    const mismatchRow: CoverageRow = {
+      ...row,
+      status: 'mismatch',
+      evidence: stubEv,
+      note:
+        row.note ||
+        'Stub/wrong-shape written pact (e.g. { isReady }) - not a correct contract vs live/OpenAPI',
+    };
+    mismatches.push(mismatchRow);
+    // Keep primary status missing (new/uncovered) but annotate
+    rows[i] = {
+      ...row,
+      note:
+        row.note ||
+        'New/uncovered API; stub pact exists - also counted in mismatch',
+      evidence: stubEv,
+    };
+  }
+
+  const missing = rows.filter((r) => r.status === 'missing');
+
   const totals = {
     ops: rows.length,
     covered: rows.filter((r) => r.status === 'covered').length,
     partial: rows.filter((r) => r.status === 'partial').length,
-    missing: rows.filter((r) => r.status === 'missing').length,
+    missing: missing.length,
+    mismatch: mismatches.length,
     deferred: rows.filter((r) => r.status === 'deferred').length,
   };
 
@@ -464,7 +581,8 @@ export async function runCoverageAudit(
     generatedAt: new Date().toISOString(),
     totals,
     rows,
-    missing: rows.filter((r) => r.status === 'missing'),
+    missing,
+    mismatches,
     deferred: rows.filter((r) => r.status === 'deferred'),
   };
 }
@@ -478,16 +596,34 @@ export function formatCoverageMarkdown(report: CoverageReport): string {
     ``,
     `## Summary`,
     ``,
-    `| Swagger ops | Covered | Partial | Missing | Deferred |`,
-    `|-------------|---------|---------|---------|----------|`,
-    `| ${report.totals.ops} | ${report.totals.covered} | ${report.totals.partial} | ${report.totals.missing} | ${report.totals.deferred} |`,
+    `| Swagger ops | Covered | Partial | Missing | Mismatch | Deferred |`,
+    `|-------------|---------|---------|---------|----------|----------|`,
+    `| ${report.totals.ops} | ${report.totals.covered} | ${report.totals.partial} | ${report.totals.missing} | ${report.totals.mismatch} | ${report.totals.deferred} |`,
     ``,
   ];
 
   if (report.missing.length) {
-    lines.push(`## Missing`, ``, `| Method | Path |`, `|--------|------|`);
+    lines.push(
+      `## Missing`,
+      ``,
+      `| Method | Path | Note |`,
+      `|--------|------|------|`
+    );
     for (const r of report.missing) {
-      lines.push(`| ${r.method} | \`${r.path}\` |`);
+      lines.push(`| ${r.method} | \`${r.path}\` | ${r.note || ''} |`);
+    }
+    lines.push(``);
+  }
+
+  if (report.mismatches.length) {
+    lines.push(
+      `## Mismatch`,
+      ``,
+      `| Method | Path | Note |`,
+      `|--------|------|------|`
+    );
+    for (const r of report.mismatches) {
+      lines.push(`| ${r.method} | \`${r.path}\` | ${r.note || ''} |`);
     }
     lines.push(``);
   }
