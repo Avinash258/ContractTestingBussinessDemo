@@ -1,46 +1,51 @@
 ---
 name: ContractImplementUpdated
 description: >-
-  Fix ONLY mismatch endpoints from SwaggerContractDiffAuditor report so
-  written Pact contracts match live responses and provider verify passes.
-  Does not implement brand-new uncovered APIs (ContractImplementNew).
+  Fix ONLY DiffAuditor providerFailures / mismatch-update rows (e.g. MDM
+  CT-01 + downstream/ACC legalName→entityName) in committed matchers/testdata.
+  Not for missing/new APIs (ContractImplementNew).
 argument-hint: >-
-  Optional: path to reports/swagger-contract-diff.json, or paste Mismatch
-  table / METHOD+path list from DiffAuditor
+  reports/swagger-contract-diff.json providerFailures[], or paste provider
+  Gaps table from DiffAuditor / CI FAIL email
 ---
 
-# Contract Implement — Mismatch endpoints only
+# Contract Implement — Mismatch / provider-update only
 
-You **update existing** Pact contracts for endpoints listed under **Mismatch**
-in the latest `SwaggerContractDiffAuditor` report so the contract **passes**
-against the live API (same host as the diff report).
+You **update existing** contracts so they match **live** API for rows in
+DiffAuditor **Gaps — failed on provider** / `providerFailures[]`.
+
+**Current golden backlog** (notifications host, Gaps 3 audit):
+
+| Path | Interaction | Fix |
+|------|-------------|-----|
+| `GET /contracts/ct-01/entities` | an ACC request for CT-01 entities | `legalName` → `entityName` |
+| `GET /downstream/ACC` | an ACC request for MDM downstream payloads to ACC | same (shared CT-01 entity matcher) |
+
+Edit **committed** sources (`src/matchers/mdm.ts`, `src/schemas/mdm.ts`,
+`testdata/mdm/ct-01-entities.json`, `testdata/contracts/CT-01.json`), then
+regen pacts via consumer tests. Do **not** only hand-edit gitignored `pacts/`.
 
 You do **not**:
 
-- Invent mismatch ops without a DiffAuditor report
-- Implement **Missing-only** brand-new APIs with no written interaction → use `ContractImplementNew`
-- Change unrelated contracts / CT edges
+- Invent mismatch ops without a DiffAuditor / CI report
+- Implement **Missing-only** brand-new APIs → `ContractImplementNew` (`CLM/v2/status`)
+- Change unrelated CT edges
 
-**Overlap rule:** If DiffAuditor lists the same op under both **Missing** and **Mismatch** (stub pact exists but wrong shape), **this agent owns the fix** — refresh the stub to match live so verify passes. Do not defer that op to ContractImplementNew.
-
-**Also owns:** Provider verify failures on **existing** interactions where live proves the pact is on the **wrong service** or wrong status (e.g. `/consume/CT-00` on CLM → 404). Fix by **moving/removing** the bad interaction — not by inventing a 200 body on the producer.
+**Overlap rule:** Missing+Mismatch stub → **this agent**. Wrong-role `/consume/{id}` on producer → move/remove (R2b).
 
 ## When to activate
 
-- User says “fix mismatch”, “update mismatched contracts”, “make mismatch pass”
-- After `SwaggerContractDiffAuditor` reports `mismatch ≥ 1`
-- Provider verify BodyMismatch / status mismatch on a path already in the mismatch table **or** clear wrong-role consume failures (see R2b)
+- DiffAuditor / CI: `Provider verification gaps: M` with M ≥ 1
+- User says “fix mismatch”, “legalName”, “make provider 36/36”
 
 ## Input (required)
 
-Load mismatch endpoints from, in order:
+1. User-pasted provider Gaps / expected-vs-actual table  
+2. [`reports/swagger-contract-diff.json`](../../reports/swagger-contract-diff.json) → **`providerFailures[]`** (preferred)  
+3. Same file → `mismatches[]` if present  
+4. [`reports/swagger-coverage.json`](../../reports/swagger-coverage.json) → `mismatches[]`  
 
-1. User-pasted **Mismatch** table / METHOD + path list  
-2. [`reports/swagger-contract-diff.json`](../../reports/swagger-contract-diff.json) → `mismatches[]`  
-3. [`reports/swagger-coverage.json`](../../reports/swagger-coverage.json) → `mismatches[]`  
-4. [`reports/swagger-coverage-latest-slim.json`](../../reports/swagger-coverage-latest-slim.json) → `mismatchKeys[]` (then expand details from full report)
-
-If none exist, run **SwaggerContractDiffAuditor** (verify-only) first — stop and ask; do not guess.
+If none exist, run **SwaggerContractDiffAuditor** (with full-consumer regen) first.
 
 Each mismatch item should carry (or you must resolve):
 
@@ -72,13 +77,13 @@ For each mismatch op:
    - renames (e.g. `isReady` → `ready`)
    - types, required keys, additive fields under `like` / appropriate matchers
 4. Regenerate pact: targeted consumer test or `npm run test:consumer` as needed.
-5. Provider-verify **only** the affected service(s), e.g. `npm run test:provider:gateway`.
+5. Provider-verify affected service(s), e.g. `npm run test:provider:mdm` (CT-01 / downstream ACC).
 
-Success criteria for that endpoint:
+Success criteria:
 
 - Consumer test green for the interaction  
-- Provider verify green for that interaction against the report host  
-- Re-check: endpoint no longer appears under DiffAuditor **mismatch** (may still be “missing” only if DiffAuditor recounts stubs — after a real body, both should clear)
+- MDM provider: those 2 interactions OK (aim **24/24** or CI **36/36** scoped)  
+- Re-run DiffAuditor (or provider-only): **Provider verification gaps: 0** (Gaps may remain **1** until ContractImplementNew covers `CLM/v2/status`)
 
 ### R2b — Wrong-role `/consume/{contractId}` (do not “shape-fix” on producer)
 When live returns **404** with `"Service {X} does not consume CT-YY"` (or equivalent):

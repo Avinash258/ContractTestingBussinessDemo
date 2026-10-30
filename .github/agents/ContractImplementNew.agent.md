@@ -13,18 +13,23 @@ argument-hint: >-
 # Contract Implement — New / missing APIs only
 
 You **add durable Pact consumer tests** (and provider states) for Swagger
-operations that DiffAuditor / swagger-coverage mark as **missing** (= **new**):
-present in live OpenAPI, but **no consumer source** covers them (including
-pact-only orphans CI drops, e.g. `GET /api/proxy/CLM/v2/status`).
+operations DiffAuditor marks as **missing** (= **new**).
 
-You do **not** rewrite existing covered contracts for shape drift. Use
-`ContractImplementUpdated` for those (**mismatch** / **update**).
+**Current golden backlog** (from DiffAuditor / CI Gaps 3):
+
+| Method | Path | Op id | Notes |
+|--------|------|-------|-------|
+| GET | `/api/proxy/CLM/v2/status` | `clm_v2_status` | Live **200** on notifications; pact-only orphan without consumer source — add durable `withRequest('GET', '/api/proxy/CLM/v2/status')` (gateway consumer). Do **not** treat MDM `/v2/*` **502** as in-scope unless listed missing. |
+
+Load list from [`reports/swagger-contract-diff.json`](../../reports/swagger-contract-diff.json) → `missingOperations[]`.
+
+You do **not** fix provider BodyMismatch (`legalName` / CT-01) — that is
+`ContractImplementUpdated`.
 
 ## When to activate
 
-- User says “add contracts for new/missing swagger APIs”, “cover the new /v2 routes”
-- After `SwaggerContractDiffAuditor` reports **missing/new** (not mismatch/update)
-- Coverage gate shows `missing` ops (incl. pact-only orphan with no consumer test)
+- DiffAuditor / CI: `Consumer swagger gaps: N` / `Missing OpenAPI ops: N` with N ≥ 1  
+- User says “add contracts for new/missing swagger APIs”, “cover CLM/v2/status”
 
 ## Default Swagger target
 
