@@ -112,8 +112,9 @@ export async function verifyProvider(opts: {
   );
   console.log('');
 
-  const verbose = /^(1|true|yes)$/i.test(String(process.env.PACT_VERBOSE || ''));
-  const restoreStdout = muteStdoutUnless(verbose);
+  // Default: show Pact "Verifying a pact…" detail. PACT_QUIET=1 → mute that chatter.
+  const quiet = /^(1|true|yes)$/i.test(String(process.env.PACT_QUIET || ''));
+  const restoreStdout = muteStdoutUnless(!quiet);
 
   try {
     let output: unknown;
@@ -122,10 +123,10 @@ export async function verifyProvider(opts: {
         provider: opts.provider,
         providerBaseUrl: opts.baseUrl,
         pactUrls,
-        // quieter than 'info'; set PACT_LOG_LEVEL=info + PACT_VERBOSE=1 for full detail
+        // 'warn' keeps interaction OK lines; ThreadId spam stays down. Override via PACT_LOG_LEVEL.
         logLevel:
           (process.env.PACT_LOG_LEVEL as 'info' | 'warn' | 'error' | 'debug') ||
-          (verbose ? 'info' : 'error'),
+          (quiet ? 'error' : 'warn'),
         stateHandlers: opts.stateHandlers || {},
       }).verifyProvider();
     } finally {
@@ -163,11 +164,12 @@ export async function verifyProvider(opts: {
   }
 }
 
-/** Suppress Pact's per-interaction chatter unless PACT_VERBOSE=1. */
-function muteStdoutUnless(verbose: boolean): () => void {
-  if (verbose) return () => undefined;
+/** When quiet=true, suppress Pact per-interaction stdout (Node-side only). */
+function muteStdoutUnless(showDetail: boolean): () => void {
+  if (showDetail) return () => undefined;
   const original = process.stdout.write.bind(process.stdout);
-  process.stdout.write = ((_chunk: unknown, ..._args: unknown[]) => true) as typeof process.stdout.write;
+  process.stdout.write = ((_chunk: unknown, ..._args: unknown[]) =>
+    true) as typeof process.stdout.write;
   return () => {
     process.stdout.write = original;
   };

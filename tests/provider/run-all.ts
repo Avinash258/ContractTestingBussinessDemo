@@ -6,6 +6,7 @@ import { spawnSync } from 'child_process';
 import path from 'path';
 import { resolveGatewayBaseUrl } from '../../src/gatewayConfig';
 import { config } from '../../src/config';
+import { filterProviderConsole } from './console-filter';
 
 const runners = [
   'clm.provider.verify.ts',
@@ -44,10 +45,13 @@ for (const file of runners) {
     process.execPath,
     [require.resolve('ts-node/dist/bin.js'), '--transpile-only', full],
     {
-      stdio: 'inherit',
+      encoding: 'utf8',
       cwd: process.cwd(),
       env: childEnv,
     }
+  );
+  process.stdout.write(
+    filterProviderConsole(`${result.stdout || ''}${result.stderr || ''}`)
   );
   outcomes.push({ name, ok: result.status === 0 });
 }
