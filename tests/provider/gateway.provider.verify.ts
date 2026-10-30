@@ -38,8 +38,6 @@ verifyProvider({
   provider: 'TaxMesh-Gateway',
   baseUrl: config.gatewayBaseUrl,
   stateHandlers: handlers,
-}).catch((err) => {
-  console.error('\nGateway provider verification FAILED');
-  console.error(err);
+}).catch(() => {
   process.exitCode = 1;
 });

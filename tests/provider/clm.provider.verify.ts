@@ -6,8 +6,6 @@ verifyProvider({
   provider: 'TaxMesh-CLM',
   baseUrl: config.serviceBaseUrl('CLM'),
   stateHandlers: buildStateHandlers(),
-}).catch((err) => {
-  console.error('\nCLM provider verification FAILED');
-  console.error(err);
+}).catch(() => {
   process.exitCode = 1;
 });

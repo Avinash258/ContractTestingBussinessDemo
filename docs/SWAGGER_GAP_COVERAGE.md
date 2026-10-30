@@ -7,7 +7,7 @@ Date: 2026-10-30
 
 | Swagger ops | Covered | Partial | Missing | Mismatch | Deferred |
 |-------------|---------|---------|---------|----------|----------|
-| 108 | 104 | 0 | 1 | 3 | 0 |
+| 108 | 105 | 0 | 1 | 2 | 0 |
 
 ## Missing
 
@@ -19,7 +19,6 @@ Date: 2026-10-30
 
 | Method | Path | Note |
 |--------|------|------|
-| GET | `/api/proxy/CLM/consume/{contractId}` | Update/mismatch: Actual map is missing the following keys: contractId, payload |
 | GET | `/api/proxy/MDM/contracts/ct-01/entities` | Update/mismatch: Actual map is missing the following keys: legalName |
 | GET | `/api/proxy/MDM/downstream/{peerId}` | Update/mismatch: Actual map is missing the following keys: legalName |
 

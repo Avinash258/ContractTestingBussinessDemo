@@ -72,7 +72,7 @@ Log provider to `reports/_diff-provider-out.txt` (or stream). **Never** `| Selec
 | **mismatch** / **update** | Contract exists but wrong (stub, provider Body/Status mismatch, wrong-role consume) |
 | **deferred** | Known skip |
 
-Example: `CLM/v2/status` → **missing: 1**; 3 provider failures → **mismatch: 3**; **covered: 104**.
+Example (CI email #528): `CLM/v2/status` → **missing/new: 1**; provider **mismatch/update: 2** (`legalName` on CT-01 + downstream/ACC); **Gaps 3** = consumer 1 + provider 2.
 
 ### R3 — Provider failures (CI red; separate from coverage)
 Every failed interaction gets a row with **endpoint details**:
@@ -129,7 +129,11 @@ Consumer swagger gaps: N · Provider verification gaps: M · Missing OpenAPI ops
 - ContractImplementUpdated — mismatch/update (e.g. legalName → entityName)
 ```
 
-**Align with CI email #528 shape:** missing/new = OpenAPI ops with no durable pact (consumer swagger gaps). mismatch/update = provider verify failures only (not double-count into missing).
+**Align with CI FAIL email (authoritative):**
+- Consumer swagger gaps / Missing OpenAPI ops = swagger-coverage **missing** only (e.g. `GET /api/proxy/CLM/v2/status`)
+- Provider verification gaps = **failed** provider interactions from the same run (e.g. CT-01 + downstream/ACC `legalName` vs live `entityName`)
+- Banner: `Consumer swagger gaps: N · Provider verification gaps: M · Missing OpenAPI ops: N` with **Gaps = N+M**
+- Do not invent extra provider gaps that CI did not fail (CLM was 13/13 on #528 — no CLM `/consume/CT-00` in email)
 
 ### R6 — Anti-patterns
 - Do not lead with “Coverage PASS / 108 covered” without **Overall** when provider failed  

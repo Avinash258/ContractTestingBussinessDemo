@@ -34,10 +34,11 @@ console.log(`  MDM proxy : ${config.serviceBaseUrl('MDM')}`);
 console.log(`  Gateway   : ${config.gatewayBaseUrl}`);
 console.log('');
 
-let failed = false;
+const outcomes: Array<{ name: string; ok: boolean }> = [];
 
 for (const file of runners) {
   const full = path.join('tests/provider', file);
+  const name = file.replace(/\.provider\.verify\.ts$/, '').toUpperCase();
   console.log(`\n======== ${file} ========`);
   const result = spawnSync(
     process.execPath,
@@ -48,7 +49,18 @@ for (const file of runners) {
       env: childEnv,
     }
   );
-  if (result.status !== 0) failed = true;
+  outcomes.push({ name, ok: result.status === 0 });
 }
 
-process.exit(failed ? 1 : 0);
+const passed = outcomes.filter((o) => o.ok).length;
+const failed = outcomes.filter((o) => !o.ok);
+console.log('\n════════════════════════════════════════');
+console.log(
+  `Provider conclusion: ${failed.length === 0 ? 'PASSED' : 'FAILED'} (${passed}/${outcomes.length})`
+);
+for (const o of outcomes) {
+  console.log(`  ${o.ok ? '✓' : '✗'} ${o.name}`);
+}
+console.log('════════════════════════════════════════\n');
+
+process.exit(failed.length ? 1 : 0);

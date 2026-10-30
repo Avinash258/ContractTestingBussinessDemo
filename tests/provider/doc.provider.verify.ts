@@ -6,8 +6,6 @@ verifyProvider({
   provider: 'TaxMesh-DOC',
   baseUrl: config.serviceBaseUrl('DOC'),
   stateHandlers: buildStateHandlers(),
-}).catch((err) => {
-  console.error('\nDOC provider verification FAILED');
-  console.error(err);
+}).catch(() => {
   process.exitCode = 1;
 });

@@ -6,8 +6,6 @@ verifyProvider({
   provider: 'TaxMesh-ALC',
   baseUrl: config.serviceBaseUrl('ALC'),
   stateHandlers: buildStateHandlers(),
-}).catch((err) => {
-  console.error('\nALC provider verification FAILED');
-  console.error(err);
+}).catch(() => {
   process.exitCode = 1;
 });

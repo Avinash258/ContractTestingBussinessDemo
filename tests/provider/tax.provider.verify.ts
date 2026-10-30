@@ -6,8 +6,6 @@ verifyProvider({
   provider: 'TaxMesh-TAX',
   baseUrl: config.serviceBaseUrl('TAX'),
   stateHandlers: buildStateHandlers(),
-}).catch((err) => {
-  console.error('\nTAX provider verification FAILED');
-  console.error(err);
+}).catch(() => {
   process.exitCode = 1;
 });

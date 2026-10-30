@@ -6,8 +6,6 @@ verifyProvider({
   provider: 'TaxMesh-ACC',
   baseUrl: config.serviceBaseUrl('ACC'),
   stateHandlers: buildStateHandlers(),
-}).catch((err) => {
-  console.error('\nACC provider verification FAILED');
-  console.error(err);
+}).catch(() => {
   process.exitCode = 1;
 });
