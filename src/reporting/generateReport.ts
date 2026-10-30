@@ -80,6 +80,7 @@ function attachCoverage(report: PactReport): PactReport {
   const partial = rows.filter((r) => r.status === 'partial').length;
   const deferred = rows.filter((r) => r.status === 'deferred').length;
   const missing = rows.filter((r) => r.status === 'missing').length;
+  const mismatch = rows.filter((r) => r.status === 'mismatch').length;
 
   report.coverage = {
     totals: {
@@ -87,6 +88,7 @@ function attachCoverage(report: PactReport): PactReport {
       covered,
       partial,
       missing,
+      mismatch,
       deferred,
     },
     rows: rows.map((r) => ({

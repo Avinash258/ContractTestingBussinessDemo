@@ -537,35 +537,54 @@ export async function runCoverageAudit(
     classifyOp(op, evidence, treatUploadAsDeferred)
   );
 
-  // Stub pact present but op not correctly covered ? count as missing AND mismatch
   const mismatches: CoverageRow[] = [];
+
+  // Stub / wrong-shape written pact ? **mismatch** (update), not missing/new
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (row.status === 'covered' || row.status === 'partial' || row.status === 'deferred') {
-      continue;
-    }
+    if (row.status === 'deferred') continue;
     const stubEv = stubSourcesForOp(row, stubs);
     if (!stubEv.length) continue;
     const mismatchRow: CoverageRow = {
       ...row,
       status: 'mismatch',
-      evidence: stubEv,
       note:
         row.note ||
-        'Stub/wrong-shape written pact (e.g. { isReady }) - not a correct contract vs live/OpenAPI',
+        'Update/mismatch: stub or wrong-shape written pact',
+      evidence: stubEv,
     };
     mismatches.push(mismatchRow);
-    // Keep primary status missing (new/uncovered) but annotate
-    rows[i] = {
-      ...row,
-      note:
-        row.note ||
-        'New/uncovered API; stub pact exists - also counted in mismatch',
-      evidence: stubEv,
-    };
+    rows[i] = mismatchRow;
   }
 
-  const missing = rows.filter((r) => r.status === 'missing');
+  // Pact-only orphans (no consumer/catalog) ? **missing/new** (CI drops them)
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.status === 'deferred' || row.status === 'mismatch') continue;
+    const ev = row.evidence || [];
+    const hasDurable = ev.some(
+      (e) => e.startsWith('consumer:') || e.startsWith('catalog:')
+    );
+    const onlyPact = ev.length > 0 && ev.every((e) => e.startsWith('pact:'));
+    if (row.status === 'covered' || row.status === 'partial') {
+      if (!hasDurable && onlyPact) {
+        rows[i] = {
+          ...row,
+          status: 'missing',
+          note:
+            row.note ||
+            'Missing/new: pact-only orphan (no consumer test) - CI drops this',
+        };
+      }
+    }
+  }
+
+  const mismatchKeys = new Set(
+    mismatches.map((r) => `${r.method} ${r.path}`)
+  );
+  const missing = rows.filter(
+    (r) => r.status === 'missing' && !mismatchKeys.has(`${r.method} ${r.path}`)
+  );
 
   const totals = {
     ops: rows.length,

@@ -1,152 +1,146 @@
 ---
 name: SwaggerContractDiffAuditor
 description: >-
-  Fast verify-only: live Swagger/OpenAPI vs already-written Pact contracts
-  (coverage + targeted live/pact mismatch probes). Does not write tests.
-  Skips full npm run test:provider unless user asks for full verify.
+  CI-parity verify-only auditor: OpenAPI↔Pact coverage PLUS provider verify
+  (CLM,MDM like azure-pipelines). Overall PASS only if both pass. Does not
+  write or fix contracts — hand failures to ContractImplementUpdated/New.
+  Say “coverage only” to skip provider.
 argument-hint: >-
-  Optional api-docs/OpenAPI URL (default notifications tunnel or
-  gateway.config.json). Add “full verify” to include provider suite.
+  Optional OpenAPI URL or gateway.config.json. “coverage only” | “full verify”
 ---
 
-# Swagger ↔ Contract Verify Auditor (fast)
+# SwaggerContractDiffAuditor (CI parity, verify-only)
 
-You **verify** live Swagger against **already-written** consumer/provider
-contracts. Report covered / missing / mismatch / host-drift.
+You **audit**. You do **not** implement or edit Pact tests.
 
-**Do not** write, generate, or edit Pact tests. No implement handoffs unless
-the user explicitly asks to fix gaps later.
+Your report must **match what Azure CI cares about**, not only Swagger coverage:
 
-## Performance budget (hard)
+| Check | CI step | Local command |
+|-------|---------|----------------|
+| OpenAPI ↔ written pacts | Swagger coverage gate | `npm run test:swagger-coverage` |
+| Live API vs pacts | Provider job (`PACT_SERVICES`, default CLM,MDM) | `npm run test:contract:provider-only -- --services=CLM,MDM` |
 
-| Step | Default | Max wall time |
-|------|---------|----------------|
-| `npm run test:swagger-coverage` | **required** | ~60s |
-| Targeted live probes + pact body diff | **required** | ~30s |
-| OpenAPI host-drift (2nd host) | optional, cheap | ~15s |
-| `npm run test:provider` (all services) | **OFF** | minutes — only if user says **full verify** |
+**Overall PASS** ⇔ coverage `missing=0` **and** scoped provider verify exit 0.  
+If provider fails while coverage is 108/108 → **Overall FAIL** (say so first). Never imply “all good” from coverage alone.
 
-**Never** pipe long runs through `Select-Object -Last` / `| tail` in a way that
-buffers all output until exit — that looks hung. Stream or run without `| Last`.
+## Modes
 
-If a step exceeds the budget, stop it, report what finished, and note the skip.
+| Mode | Trigger | Provider |
+|------|---------|----------|
+| **CI parity (default)** | `execute` / `match CI` / no qualifier | CLM,MDM (or `PACT_SERVICES`) |
+| **Coverage only** | user says **coverage only** / **fast** | skipped — Overall may only reflect coverage; label mode clearly |
+| **Full provider** | **full verify** | `npm run test:provider` (all services) |
 
-## When to activate
+## Gateway / OpenAPI
 
-- “verify swagger vs contracts”, “is swagger covered?”, “execute DiffAuditor”
-- User points at `…/api-docs` or `…/openapi.json`
+1. User URL if given  
+2. Else [`gateway.config.json`](../../gateway.config.json) (same SoT as CI)  
+3. OpenAPI = `{origin}/openapi.json`
 
-## Default Swagger target
+## Performance
 
-| Surface | URL |
-|---------|-----|
-| Swagger UI | `https://notifications-ads-cnet-room.trycloudflare.com/api-docs` |
-| OpenAPI | `https://notifications-ads-cnet-room.trycloudflare.com/openapi.json` |
-| Repo gateway | [`gateway.config.json`](../../gateway.config.json) |
+| Step | Required in CI parity | Budget |
+|------|----------------------|--------|
+| `test:swagger-coverage` | yes | ~60s |
+| Targeted probes (`/v2/`, deltas) | yes | ~30s |
+| `test:contract:provider-only --services=CLM,MDM` | yes | ~5–10 min |
 
-Prefer user URL → else `gateway.config.json` → else notifications default.
-OpenAPI = `{origin}/openapi.json`.
+Log provider to `reports/_diff-provider-out.txt` (or stream). **Never** `| Select-Object -Last` / `| tail` on long runs.
 
 ## Hard rules
 
-### R1 — Fast verify path (default)
-1. Resolve origin; `GET {origin}/openapi.json` (fail fast on non-JSON / timeout).
-2. **Token-cheap context first:** read `reports/swagger-coverage-latest-slim.json` (or last line of `reports/swagger-coverage-history.jsonl`) — totals + missing/mismatch **keys only**, plus `deltaVsPrevious`. Do **not** dump full `swagger-coverage.json` rows into the reply unless debugging one op.
-3. Coverage vs written pacts:
-   ```bash
-   GATEWAY_BASE_URL=<origin> npm run test:swagger-coverage
-   ```
-   Script refreshes full JSON **and** appends a slim history entry (max ~40 runs).
-4. Prefer probing **delta** keys (`missingAdded` / `mismatchAdded`) + known `/v2/` paths — not all 108 ops.
-5. **Mismatch probes (targeted only):**
-   - Candidates: history deltas, `missing`/`mismatch` keys, `/v2/`, host-drift-only paths.
-   - Live GET (short timeout) + pact body unwrap when needed.
-   - Live **502** while pact expects 200 → **host-capability** note.
-6. Optional host-drift: OpenAPI op-set diff only (no full schemas unless mismatch).
-7. Emit compact report. **Stop.** No full provider suite on the default path.
-
-### R1b — Full verify (opt-in only)
-Only when user says **full verify** / **include provider** / **run provider**:
-
-```bash
-npm run test:provider
+### R1 — Run order (CI parity)
+```text
+1. Resolve GATEWAY_BASE_URL from gateway.config.json
+2. npm run test:swagger-coverage   (+ slim history)
+3. Targeted live probes
+4. npm run test:contract:provider-only -- --services=CLM,MDM
+5. Write reports/swagger-contract-diff.json
+6. Reply with Overall first
 ```
 
-Or a single service if they name one: `npm run test:provider:gateway`, etc.
-Summarize pass/fail by service; do not fix failures here.
+### R2 — Coverage labels (effective — not path-only)
 
-### R2 — Labels
+**Incorrect:** path-only `108/0/0` when CI has gaps.
+
+**Correct totals:**
 
 | Label | Meaning |
 |-------|---------|
-| **covered** | Written Pact interaction maps to Swagger op **and** live shape agrees (or additive-only) |
-| **missing** | In Swagger; **no correct written contract** — includes **new APIs**. Always count in `missing`. |
-| **mismatch** | Written stub/wrong-shape pact exists (e.g. `{ isReady }` vs live `{ ready,… }`) or live shape regresses. **May overlap missing** (same new+stub op → missing **and** mismatch both +1). |
+| **covered** | Durable contract + provider-clean |
+| **missing** / **new** | No correct written contract (incl. pact-only orphan CI drops, e.g. `CLM/v2/status`) |
+| **mismatch** / **update** | Contract exists but wrong (stub, provider Body/Status mismatch, wrong-role consume) |
 | **deferred** | Known skip |
-| **host-drift** | Informational; if no correct contract → also **missing** |
-| **host-capability** | Live 502/404 vs pact 200 — note separately |
 
-**Totals rule:** New API with stub pact → `missing: 1` **and** `mismatch: 1` (both counts). Do not leave either at 0 when that case exists.
+Example: `CLM/v2/status` → **missing: 1**; 3 provider failures → **mismatch: 3**; **covered: 104**.
 
-Equivalence: `/api/proxy/{SVC}/…` ↔ `TaxMesh-{SVC}` service path; gateway `/api/flow|contracts|filing/…` ↔ Client→Gateway.
+### R3 — Provider failures (CI red; separate from coverage)
+Every failed interaction gets a row with **endpoint details**:
 
-### R3 — Artifacts
-- Via script: `reports/swagger-coverage.json`, `swagger-coverage-history.jsonl`, `swagger-coverage-latest-slim.json`, `docs/SWAGGER_GAP_COVERAGE.md`, optional `swagger-contract-diff.json`
-- History is **slim** (totals + gap keys + deltas) for agent token optimization — `reports/` is gitignored; local across runs
-- Must **not** edit consumers, providers, pacts, matchers, catalog
+| Field | Required |
+|-------|----------|
+| service (TaxMesh-*) | yes |
+| method + path | yes |
+| full endpoint URL (`{gateway}/api/proxy/{SVC}{path}` when service pact) | yes |
+| expected status/body vs actual | yes |
+| pact file | yes |
+| note | wrong-role consume / BodyMismatch field / etc. |
 
-### R4 — Report format
+**Wrong-role `/consume/{CT-id}`:** live `404` + `does not consume` → **mismatch/update**; catalog says correct provider is **`ct.consumer`**.
+
+**BodyMismatch** (e.g. missing `legalName`) → **mismatch/update**; hand to `ContractImplementUpdated`.
+
+Count: `providerFailures = N`. Include in Overall reason: `FAIL — provider N failures (coverage clean)`.
+
+### R4 — Do not implement
+- No edits to `tests/consumer/**`, `tests/provider/**`, `pacts/**`, matchers, catalog  
+- Allowed: coverage/history/diff JSON under `reports/`, `docs/SWAGGER_GAP_COVERAGE.md` via scripts  
+- Next step (mention once): **ContractImplementUpdated** for provider-failures / mismatch; **ContractImplementNew** for missing-only new ops
+
+### R5 — Report format (mandatory — match CI FAIL email)
+
+Mirror `emailDashboard` / pipeline FAIL REPORT wording:
 
 ```markdown
+## FAIL REPORT (or PASS)
+Contract and/or Swagger coverage gaps detected.
+Consumer swagger gaps: N · Provider verification gaps: M · Missing OpenAPI ops: N
+
 ## Swagger source
-- UI / OpenAPI / gateway.config.json
+- Target gateway (gateway.config.json) · Scope CLM,MDM
 
 ## Coverage vs written contracts
-| ops | covered | missing | mismatch | deferred |
-(Note: **missing** includes new APIs / stub-only / host-drift-without-real-contract)
+| ops | covered | missing/new | mismatch/update | deferred |
 
-## Missing (includes new APIs)
-For **each** missing op, include endpoint details (not path-only):
+## Swagger gaps — missing in consumer / Pact (missing/new)
+| Operation | Why | Op id |
+| GET /api/proxy/CLM/v2/status | No consumer/pact contract covers this OpenAPI operation | clm_v2_status |
 
-| Method | Path | operationId | Full endpoint URL | Live status | Why missing |
+## Gaps — failed on provider (mismatch/update)
+| Endpoint | What failed | Interaction |
+| GET /contracts/ct-01/entities | Actual map is missing legalName (live has entityName) | an ACC request for CT-01 entities |
+| GET /downstream/ACC | Actual map is missing legalName | an ACC request for MDM downstream … |
 
-Also list per op (compact bullets OK): OpenAPI summary, consumer→provider if known, live response keys (or short sample).
+## Provider failures — expected vs actual
+| Endpoint | Expected (contract) | Actual (live API) |
 
-## Mismatch
-For **each** mismatch op, include the **same endpoint details** plus pact vs live:
-
-| Method | Path | operationId | Full endpoint URL | Live status | Pact expected | Live actual (keys/sample) | Pact evidence |
-
-Do not leave mismatch as a narrative-only note without Method/Path/URL.
-
-## Host capability / drift
-- …
-
-## Provider verify
-- skipped (default) | or summary if full verify
-
-## Covered summary
-- N ops with written contracts
+## Next (verify-only)
+- ContractImplementNew — missing/new (e.g. CLM/v2/status)
+- ContractImplementUpdated — mismatch/update (e.g. legalName → entityName)
 ```
 
-## Workflow
+**Align with CI email #528 shape:** missing/new = OpenAPI ops with no durable pact (consumer swagger gaps). mismatch/update = provider verify failures only (not double-count into missing).
 
-```text
-DEFAULT (< ~2 min):
-  origin → test:swagger-coverage → targeted probes → host-drift → report
-
-OPT-IN:
-  + npm run test:provider (or one service)
-```
-
-## Anti-patterns
-
-- Do not run full `test:provider` unless asked  
-- Do not implement or rewrite contracts  
-- Do not buffer entire provider logs with `Select-Object -Last`  
-- Do not treat host 502 on `/v2/*` as a coverage “missing”  
+### R6 — Anti-patterns
+- Do not lead with “Coverage PASS / 108 covered” without **Overall** when provider failed  
+- Do not skip provider in default / CI parity mode  
+- Do not treat provider BodyMismatch as Swagger coverage “covered = all good”  
+- Do not “fix” by rewriting pacts in this agent  
+- Do not treat host 502 on `/v2/*` as coverage missing  
 
 ## Repo pointers
 
-- `scripts/verify-swagger-coverage.ts`, `src/swagger/coverageAudit.ts`
-- `gateway.config.json`, `pacts/`, `tests/consumer/`, `tests/provider/`
+- CI: [`azure-pipelines.yml`](../../azure-pipelines.yml)  
+- Coverage: `scripts/verify-swagger-coverage.ts`, `src/swagger/coverageAudit.ts`  
+- Config: `gateway.config.json`  
+- Fix agents: `ContractImplementUpdated.agent.md`, `ContractImplementNew.agent.md`

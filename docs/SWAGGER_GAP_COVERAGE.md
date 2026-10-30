@@ -7,7 +7,21 @@ Date: 2026-10-30
 
 | Swagger ops | Covered | Partial | Missing | Mismatch | Deferred |
 |-------------|---------|---------|---------|----------|----------|
-| 108 | 108 | 0 | 0 | 0 | 0 |
+| 108 | 104 | 0 | 1 | 3 | 0 |
+
+## Missing
+
+| Method | Path | Note |
+|--------|------|------|
+| GET | `/api/proxy/CLM/v2/status` | Missing/new: pact-only orphan (no consumer test) - CI drops this |
+
+## Mismatch
+
+| Method | Path | Note |
+|--------|------|------|
+| GET | `/api/proxy/CLM/consume/{contractId}` | Update/mismatch: Actual map is missing the following keys: contractId, payload |
+| GET | `/api/proxy/MDM/contracts/ct-01/entities` | Update/mismatch: Actual map is missing the following keys: legalName |
+| GET | `/api/proxy/MDM/downstream/{peerId}` | Update/mismatch: Actual map is missing the following keys: legalName |
 
 ## Equivalent coverage note
 

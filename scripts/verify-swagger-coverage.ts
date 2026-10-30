@@ -20,6 +20,10 @@ import {
   resolveSwaggerUiUrl,
   runCoverageAudit,
 } from '../src/swagger/coverageAudit';
+import {
+  applyProviderGapsToCoverage,
+  loadProviderGapsFromPactReport,
+} from '../src/swagger/applyProviderGaps';
 import { appendCoverageHistory } from '../src/swagger/coverageHistory';
 import { normalizeGatewayOrigin } from '../src/gatewayConfig';
 
@@ -45,10 +49,37 @@ async function main() {
   console.log(`OpenAPI : ${openApiUrl}`);
   console.log(`Swagger : ${swaggerUi}`);
 
-  const report = await runCoverageAudit({ openApiUrl });
+  let report = await runCoverageAudit({ openApiUrl });
 
   const reportsDir = path.resolve(process.cwd(), 'reports');
   fs.mkdirSync(reportsDir, { recursive: true });
+
+  // Merge provider-verify failures into mismatch (corrects false 108/0/0 when CI provider is red)
+  const mergeProvider =
+    process.argv.includes('--with-provider-gaps') ||
+    process.env.SWAGGER_COVERAGE_MERGE_PROVIDER === '1' ||
+    process.env.SWAGGER_COVERAGE_MERGE_PROVIDER === 'true' ||
+    fs.existsSync(path.join(reportsDir, 'pact-report.json'));
+
+  if (mergeProvider) {
+    const pactReportPath = path.join(reportsDir, 'pact-report.json');
+    if (fs.existsSync(pactReportPath)) {
+      try {
+        const pactReport = JSON.parse(fs.readFileSync(pactReportPath, 'utf8'));
+        const gaps = loadProviderGapsFromPactReport(pactReport);
+        if (gaps.length) {
+          const mismatchBefore = report.totals.mismatch;
+          report = applyProviderGapsToCoverage(report, gaps);
+          console.log(
+            `Merged ${gaps.length} provider gap(s) → mismatch ${mismatchBefore} → ${report.totals.mismatch} (updates); missing/new=${report.totals.missing}`
+          );
+        }
+      } catch (e) {
+        console.warn('Could not merge provider gaps:', (e as Error).message);
+      }
+    }
+  }
+
   const jsonPath = path.join(reportsDir, 'swagger-coverage.json');
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf8');
 
@@ -79,7 +110,7 @@ async function main() {
   }
 
   if (report.mismatches.length) {
-    console.log('\nMismatch operations (stub/wrong-shape pact):');
+    console.log('\nMismatch operations (updates / bad existing contracts):');
     for (const row of report.mismatches) {
       console.log(`  ${row.method} ${row.path}${row.note ? ` — ${row.note}` : ''}`);
     }
@@ -99,18 +130,19 @@ async function main() {
     console.log(`Doc      : ${docPath}`);
   }
 
-  if (failOnGap && report.missing.length > 0) {
+  const gapCount = report.missing.length + report.totals.mismatch;
+  if (failOnGap && gapCount > 0) {
     console.error(
-      `\n##vso[task.logissue type=error]Swagger coverage gap: ${report.missing.length} uncovered OpenAPI operation(s). Hand off to TestCaseGenratorViaSwagger.`
+      `\n##vso[task.logissue type=error]Swagger coverage gap: ${report.missing.length} missing/new, ${report.totals.mismatch} mismatch/update. Hand off to ContractImplementNew/Updated.`
     );
     process.exit(1);
   }
 
-  if (report.missing.length === 0) {
-    console.log('\nSwagger coverage gate: PASS (no unexpected missing ops).\n');
+  if (gapCount === 0) {
+    console.log('\nSwagger coverage gate: PASS (no missing/new or mismatch/update).\n');
   } else {
     console.log(
-      `\nSwagger coverage: ${report.missing.length} missing (warn only — pass --fail-on-gap to gate CI).\n`
+      `\nSwagger coverage: ${report.missing.length} missing/new, ${report.totals.mismatch} mismatch/update${failOnGap ? '' : ' (warn only — pass --fail-on-gap to gate CI)'}.\n`
     );
   }
 }

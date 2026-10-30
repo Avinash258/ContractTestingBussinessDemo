@@ -5,7 +5,7 @@ Custom Cursor agents for the TaxMesh Pact framework in this repo.
 | Agent | Role |
 |-------|------|
 | [FrameworkAuditor](./FrameworkAuditor.agent.md) | Read-only audit of agents, CI, scripts, and `testdata/` drift |
-| [SwaggerContractDiffAuditor](./SwaggerContractDiffAuditor.agent.md) | **Fast verify-only**: Swagger vs written pacts (coverage + targeted probes); full `test:provider` only if you say “full verify” |
+| [SwaggerContractDiffAuditor](./SwaggerContractDiffAuditor.agent.md) | **CI parity**: coverage + provider; totals fold provider failures into **mismatch** (not false 108/0/0) |
 | [ContractImplementNew](./ContractImplementNew.agent.md) | Implement Pact contracts **only for NEW** Swagger ops |
 | [ContractImplementUpdated](./ContractImplementUpdated.agent.md) | Fix **only Mismatch** endpoints from DiffAuditor report so contracts pass vs live |
 | [ContractCoverageAuditor](./ContractCoverageAuditor.agent.md) | Read-only coverage report vs OpenAPI (`npm run test:swagger-coverage[:ci]`) |
