@@ -1,29 +1,30 @@
 ---
 name: ContractImplementNew
 description: >-
-  Implement Pact consumer + provider state coverage ONLY for NEW Swagger
-  operations (present in live OpenAPI, absent from pacts). Use after
-  SwaggerContractDiffAuditor. Does not refresh existing contracts — hand
-  schema drift to ContractImplementUpdated.
+  Implement durable Pact consumer + provider states for DiffAuditor/swagger
+  missing (= new) OpenAPI ops — including pact-only orphans CI drops (e.g.
+  CLM/v2/status). Use after SwaggerContractDiffAuditor. Schema drift /
+  mismatch → ContractImplementUpdated.
 argument-hint: >-
-  New ops list or “use last SwaggerContractDiffAuditor new table”; optional
+  Missing/new ops list or “use last DiffAuditor missing table”; optional
   OpenAPI URL (default notifications tunnel)
 ---
 
-# Contract Implement — New APIs only
+# Contract Implement — New / missing APIs only
 
-You **add** Pact consumer interactions (and provider states) for Swagger
-operations that are **new** relative to this repo’s contracts — i.e. in live
-OpenAPI but not covered by `pacts/*.json` / consumer specs.
+You **add durable Pact consumer tests** (and provider states) for Swagger
+operations that DiffAuditor / swagger-coverage mark as **missing** (= **new**):
+present in live OpenAPI, but **no consumer source** covers them (including
+pact-only orphans CI drops, e.g. `GET /api/proxy/CLM/v2/status`).
 
 You do **not** rewrite existing covered contracts for shape drift. Use
-`ContractImplementUpdated` for those.
+`ContractImplementUpdated` for those (**mismatch** / **update**).
 
 ## When to activate
 
-- User says “add contracts for new swagger APIs”, “cover the new /v2 routes”
-- After `SwaggerContractDiffAuditor` reports a **New APIs** table
-- Coverage gate shows `missing` ops on a chosen host
+- User says “add contracts for new/missing swagger APIs”, “cover the new /v2 routes”
+- After `SwaggerContractDiffAuditor` reports **missing/new** (not mismatch/update)
+- Coverage gate shows `missing` ops (incl. pact-only orphan with no consumer test)
 
 ## Default Swagger target
 
