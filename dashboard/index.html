@@ -1853,7 +1853,7 @@
           ? (provider.skippedReason || 'Provider verification was not run.')
           : filter === 'failed'
             ? 'No failed provider interactions.'
-            : 'No provider interaction details available.';
+          : 'No provider interaction details available.';
 
       const colSpan = filter === 'failed' ? 5 : 6;
       document.getElementById('providerTable').innerHTML = visible.map((item) => `
@@ -1958,7 +1958,7 @@
         const statusVal = failRows != null ? String(row[failRows] || '').toLowerCase() : '';
         const rowFailed = statusVal === 'failed';
         return `<Row>${row.map((cell, idx) => {
-          const isNum = typeof cell === 'number' && Number.isFinite(cell);
+        const isNum = typeof cell === 'number' && Number.isFinite(cell);
           let style = numberCols.has(idx) ? 'Num' : 'Wrap';
           if (statusCols.has(idx)) style = statusStyleId(cell);
           else if (rowFailed) style = 'FailRow';
@@ -2385,9 +2385,9 @@ ${sheets.join('\n')}
         ...(provider.failures || []).map((failure) => {
           const clarified = clarifyCompare({ ...failure, status: 'failed' });
           return {
-            title: `Provider: ${failure.interaction}`,
-            endpoint: failure.endpoint || '',
-            fullUrl: failure.fullUrl || '',
+          title: `Provider: ${failure.interaction}`,
+          endpoint: failure.endpoint || '',
+          fullUrl: failure.fullUrl || '',
             summary: clarified.reason || failure.reason,
             details: (clarified.details || []).length
               ? clarified.details

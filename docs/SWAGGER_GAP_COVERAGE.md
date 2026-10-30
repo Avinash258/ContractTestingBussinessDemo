@@ -7,19 +7,7 @@ Date: 2026-10-30
 
 | Swagger ops | Covered | Partial | Missing | Mismatch | Deferred |
 |-------------|---------|---------|---------|----------|----------|
-| 108 | 107 | 0 | 1 | 1 | 0 |
-
-## Missing
-
-| Method | Path | Note |
-|--------|------|------|
-| GET | `/api/proxy/CLM/v2/status` | New/uncovered API; stub pact exists - also counted in mismatch |
-
-## Mismatch
-
-| Method | Path | Note |
-|--------|------|------|
-| GET | `/api/proxy/CLM/v2/status` | Stub/wrong-shape written pact (e.g. { isReady }) - not a correct contract vs live/OpenAPI |
+| 108 | 108 | 0 | 0 | 0 | 0 |
 
 ## Equivalent coverage note
 
