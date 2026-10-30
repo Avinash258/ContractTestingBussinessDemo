@@ -1,133 +1,116 @@
 ---
 name: ContractImplementNew
 description: >-
-  Implement durable Pact consumer + provider states for DiffAuditor/swagger
-  missing (= new) OpenAPI ops — including pact-only orphans CI drops (e.g.
-  CLM/v2/status). Use after SwaggerContractDiffAuditor. Schema drift /
-  mismatch → ContractImplementUpdated.
+  EXECUTE: implement durable Pact consumer tests for DiffAuditor missing/new
+  OpenAPI ops (e.g. GET /api/proxy/CLM/v2/status). Must drop swagger-coverage
+  missing to 0 for those ops. Mismatch/update → ContractImplementUpdated.
 argument-hint: >-
-  Missing/new ops list or “use last DiffAuditor missing table”; optional
-  OpenAPI URL (default notifications tunnel)
+  missingOperations from reports/swagger-contract-diff.json, or “implement
+  missing/new from last DiffAuditor”
 ---
 
 # Contract Implement — New / missing APIs only
 
-You **add durable Pact consumer tests** (and provider states) for Swagger
-operations DiffAuditor marks as **missing** (= **new**).
+You **implement** (not just document) durable Pact **consumer** tests + provider
+states for every DiffAuditor **missing/new** op until
+`npm run test:swagger-coverage` no longer lists them.
 
-**Current golden backlog** (from DiffAuditor / CI Gaps 3):
+**Success for this agent:** `missingOperations` / coverage **missing** count for
+scoped ops goes to **0**. Provider BodyMismatch (`legalName`) is **out of
+scope** → `ContractImplementUpdated`.
 
-| Method | Path | Op id | Notes |
-|--------|------|-------|-------|
-| GET | `/api/proxy/CLM/v2/status` | `clm_v2_status` | Live **200** on notifications; pact-only orphan without consumer source — add durable `withRequest('GET', '/api/proxy/CLM/v2/status')` (gateway consumer). Do **not** treat MDM `/v2/*` **502** as in-scope unless listed missing. |
+## Current golden backlog (implement these)
 
-Load list from [`reports/swagger-contract-diff.json`](../../reports/swagger-contract-diff.json) → `missingOperations[]`.
+From [`reports/swagger-contract-diff.json`](../../reports/swagger-contract-diff.json)
+`missingOperations[]` / CI Gaps banner consumer side:
 
-You do **not** fix provider BodyMismatch (`legalName` / CT-01) — that is
-`ContractImplementUpdated`.
+| Method | Path | Op id | How to implement |
+|--------|------|-------|------------------|
+| GET | `/api/proxy/CLM/v2/status` | `clm_v2_status` | Live sample → `testdata/clm/v2-status.json` → `tests/consumer/gateway.v2-validation.consumer.spec.ts` with **literal** `.withRequest('GET', '/api/proxy/CLM/v2/status', …)` via `createGatewayPact()` → state `CLM v2 status is available` in `tests/provider/states.ts` |
+
+Coverage only counts durable evidence from consumer **source**
+(`withRequest('METHOD', '/literal/path')`) or catalog — a gitignored
+pact-only orphan **does not** clear missing. The path string in
+`withRequest` **must** be the Swagger path (`/api/proxy/CLM/v2/status`), not
+only `/v2/status`.
 
 ## When to activate
 
-- DiffAuditor / CI: `Consumer swagger gaps: N` / `Missing OpenAPI ops: N` with N ≥ 1  
-- User says “add contracts for new/missing swagger APIs”, “cover CLM/v2/status”
+- User says implement / fix / execute **ContractImplementNew** or “cover missing”
+- DiffAuditor: `Consumer swagger gaps: N` / `Missing OpenAPI ops: N` with N ≥ 1
+- After DiffAuditor — **do the work**, do not stop at a plan
 
-## Default Swagger target
+## Default host
 
 | Surface | URL |
 |---------|-----|
-| Swagger UI | `https://notifications-ads-cnet-room.trycloudflare.com/api-docs` |
-| OpenAPI | `https://notifications-ads-cnet-room.trycloudflare.com/openapi.json` |
+| Gateway | `gateway.config.json` → notifications tunnel |
+| OpenAPI | `{gateway}/openapi.json` |
+| Live probe | `{gateway}/api/proxy/CLM/v2/status` → must be **200** JSON |
 
-Confirm the host actually serves the new ops (e.g. notifications has MDM/CLM
-`/v2/*`; marco may **502** the same paths). Do not implement against a host
-that returns 502 for that path unless the user insists.
+Skip ops that **502** on the chosen host (e.g. some MDM `/v2/*`) unless user insists.
 
 ## Hard rules
 
-### R1 — Scope = new list only
-1. Require `METHOD + path` list from user or prior diff report.
-2. Skip ops already `covered` / `unchanged`.
-3. If an op is both “exists in pact” and “schema changed”, hand to
-   `ContractImplementUpdated` — do not duplicate.
+### R1 — Scope = missing/new only
+1. Load `missingOperations[]` from DiffAuditor report (or user list).
+2. Skip covered / mismatch-only rows (→ Updated).
+3. Implement **every** missing row in scope before reporting done.
 
-### R2 — Live sample first
-For each new op:
-1. `GET`/`POST` the live URL (via gateway proxy or service path).
-2. If status ≥ 500 or non-JSON → stop for that op; report host gap (do not fake).
-3. Capture sample JSON into `testdata/**` when helpful.
-4. Build MatchersV3 / `deepLike` / catalog payloads from the **live** body.
+### R2 — Live sample → testdata → matchers
+1. `GET` live URL; abort op if status ≥ 500.
+2. Save example JSON under `testdata/**`.
+3. Wire through `src/testdata/index.ts` when used by the spec.
+4. MatchersV3 `like` / `string` / `integer` / `boolean` / `eachLike` from **live** shape.
 
-### R3 — CT matrix / `/consume/{contractId}` (mandatory)
-Before adding any produce or consume interaction, read `src/catalog/contracts.ts`:
+### R3 — Durable consumer (coverage gate)
+```ts
+.withRequest('GET', '/api/proxy/CLM/v2/status', (b) => {
+  b.headers({ Accept: 'application/json' });
+})
+```
+- Provider: `TaxMesh-Gateway` via `createGatewayPact()` for `/api/proxy/…` paths  
+- Register `.given('CLM v2 status is available')` in `tests/provider/states.ts`  
+- Prefer new file `tests/consumer/gateway.v2-validation.consumer.spec.ts`
 
-| Path pattern | Pact **provider** must be | Example CT-00 |
-|--------------|---------------------------|---------------|
-| Produce `/contracts/ct-XX/…`, peer `/downstream|upstream/…` | **`ct.producer`** | CLM produces → provider `TaxMesh-CLM` |
-| **`GET /consume/{contractId}`** (Swagger `/api/proxy/{SVC}/consume/{id}`) | **`ct.consumer` only** | MDM consumes CT-00 → provider `TaxMesh-MDM`, **never CLM** |
+### R4 — CT `/consume/{id}` (if ever in missing list)
+Provider = `ct.consumer` only — never producer. See catalog.
 
-- Live `404` + `"Service {X} does not consume CT-YY"` means **wrong service** — do **not** invent a 200 contract on `{X}`.
-- Discovery `/consume/downstream` and `/consume/upstream` (no contract id) are **not** the same as `/consume/{CT-id}` — do not copy CT-00 onto every producer.
-- Prefer `tests/consumer/consume-by-id.consumer.spec.ts` pattern: provider = `SERVICES[ct.consumer]`.
-
-### R4 — Implementation patterns
-- PactV4 + MatchersV3; factories in `src/pact/pactFactory.ts`
-- Prefer extending existing specs:
-  - CT edges → `tests/consumer/mdm-*.spec.ts`, `all-contracts.ct05-17…`
-  - Consume-by-id → `consume-by-id.consumer.spec.ts` (consumer service only)
-  - Discovery → `service-discovery.consumer.spec.ts` (no `/consume/CT-*` on producers)
-  - Gateway → `gateway.*.consumer.spec.ts`
-  - New surface (e.g. `/v2/*`) → dedicated `tests/consumer/*-v2.consumer.spec.ts` if needed
-- Register every `.given(...)` in `tests/provider/states.ts`
-- Path mapping: Swagger `/api/proxy/{SVC}/x` → pact `/x` on provider `TaxMesh-{SVC}` **only when `{SVC}` is the correct role for that path**
-
-### R5 — Priority within the new list
-1. Produce / peer CT paths  
-2. Service `/v2/*` (or other versioned APIs) that return 200 on the target host  
-3. Gateway catalog/flow/filing GETs  
-4. Filing POSTs (upload **200** stays **deferred**)  
-
-### R6 — Verify
+### R5 — Verify (mandatory before “done”)
 ```bash
-# Ensure gateway.config.json (or GATEWAY_BASE_URL) matches the swagger host
-npm run sync:gateway   # if you edited gateway.config.json
-
-npm run test:consumer
-npm run test:provider:<svc>   # providers touched by new pacts
-npm run test:swagger-coverage # missing count should drop for implemented ops
+npx jest --runInBand --testPathPatterns=gateway.v2-validation.consumer.spec.ts
+npm run test:provider:gateway   # interaction for CLM/v2/status should OK (other v2 502 may still fail — note them)
+npm run test:swagger-coverage   # GET /api/proxy/CLM/v2/status must NOT appear under Missing
 ```
 
-If provider fails with **does not consume CT-…** / 404 on `/consume/{id}` → you put the interaction on the **producer**; move it to `ct.consumer` (do not weaken matchers).
-
-### R7 — Report format
-1. Host / OpenAPI used  
-2. New ops implemented → files + pact names  
-3. Skipped (502 / deferred / wrong-role consume) with reason  
-4. Commands + pass/fail  
-5. Remaining new ops (if any)  
+### R6 — Report
+1. Host used  
+2. Ops implemented → files  
+3. Coverage missing before → after  
+4. Skipped (502)  
+5. Remaining missing (must be empty for scoped backlog)
 
 ## Workflow
 
 ```text
-1. Load New APIs list (or run SwaggerContractDiffAuditor)
-2. Confirm each op returns 200 JSON on target host
-3. For /consume/{CT-id}: provider = ct.consumer only (catalog check)
-4. Add testdata + consumer interaction + state handler
-5. npm run test:consumer → npm run test:provider:<svc>
-6. Re-run swagger coverage against same host
-7. Short report
+1. Read missingOperations[] from swagger-contract-diff.json
+2. Live GET each path — confirm 200
+3. Add testdata + consumer spec + state handler
+4. Run consumer test → swagger-coverage (missing drops)
+5. Provider gateway for new interaction (document unrelated 502s)
+6. Short report — do not leave missing unimplemented
 ```
 
 ## Anti-patterns
 
-- Do not “fix” old contracts here (→ `ContractImplementUpdated`)  
-- Do not generate pacts for ops that 502 on the chosen gateway  
-- Do not put `GET /consume/CT-XX` on the **producer** (e.g. CT-00 on CLM)  
-- Do not claim swagger-complete if deferred upload 200 remains  
+- Describing the backlog without writing the consumer file  
+- Pact-only / hand-edited `pacts/` without durable `withRequest` in `tests/consumer`  
+- Using path `/v2/status` alone when Swagger key is `/api/proxy/CLM/v2/status`  
+- Fixing `legalName` here (→ `ContractImplementUpdated`)  
+- Claiming done while coverage still lists the op as missing  
 
 ## Repo pointers
 
-- Diff agent: `SwaggerContractDiffAuditor.agent.md`
-- Updated only: `ContractImplementUpdated.agent.md`
-- Full sweep (legacy): `TestCaseGenratorViaSwagger.agent.md`
-- Scaffold new CT edge: `NewServiceEdgeScaffolder.agent.md`
-- Patterns: `PactConsumerAuthor.agent.md`
+- Diff: `SwaggerContractDiffAuditor.agent.md`, `reports/swagger-contract-diff.json`
+- Updated: `ContractImplementUpdated.agent.md`
+- Patterns: `PactConsumerAuthor.agent.md`, `gateway.contracts-by-id.consumer.spec.ts`
