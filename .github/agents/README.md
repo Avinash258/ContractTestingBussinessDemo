@@ -5,8 +5,11 @@ Custom Cursor agents for the TaxMesh Pact framework in this repo.
 | Agent | Role |
 |-------|------|
 | [FrameworkAuditor](./FrameworkAuditor.agent.md) | Read-only audit of agents, CI, scripts, and `testdata/` drift |
+| [SwaggerContractDiffAuditor](./SwaggerContractDiffAuditor.agent.md) | **Execute** live Swagger vs pacts → **new / updated** API tables (default: notifications tunnel) |
+| [ContractImplementNew](./ContractImplementNew.agent.md) | Implement Pact contracts **only for NEW** Swagger ops |
+| [ContractImplementUpdated](./ContractImplementUpdated.agent.md) | Refresh Pact contracts **only for UPDATED** Swagger ops |
 | [ContractCoverageAuditor](./ContractCoverageAuditor.agent.md) | Read-only coverage report vs OpenAPI (`npm run test:swagger-coverage[:ci]`) |
-| [TestCaseGenratorViaSwagger](./TestCaseGenratorViaSwagger.agent.md) | Swagger → generate missing consumer/provider contracts |
+| [TestCaseGenratorViaSwagger](./TestCaseGenratorViaSwagger.agent.md) | Full Swagger sweep → generate missing contracts (legacy all-in-one) |
 | [PactProviderVerifier](./PactProviderVerifier.agent.md) | Run/fix provider verification |
 | [PactFailureDoctor](./PactFailureDoctor.agent.md) | Diagnose BodyMismatch / red Pact runs |
 | [PactConsumerAuthor](./PactConsumerAuthor.agent.md) | Author a targeted consumer edge |
@@ -19,7 +22,10 @@ Custom Cursor agents for the TaxMesh Pact framework in this repo.
 
 Suggested order when unsure:
 
-1. **FrameworkAuditor** — if agents/CI/docs may be stale  
-2. **ContractCoverageAuditor** — API coverage gaps  
-3. **TestCaseGenratorViaSwagger** or **PactConsumerAuthor** — close gaps  
+1. **SwaggerContractDiffAuditor** — against target `api-docs` (e.g. notifications) → new vs updated  
+2. **ContractImplementNew** — close **new** ops  
+3. **ContractImplementUpdated** — align **updated** ops  
 4. **PactProviderVerifier** → **PactFailureDoctor** if red  
+5. **FrameworkAuditor** / **ContractCoverageAuditor** — broader health / totals  
+
+Legacy all-in-one: **TestCaseGenratorViaSwagger**.

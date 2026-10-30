@@ -1,44 +1,42 @@
 # Swagger ? Pact coverage gap analysis
 
 Source: `https://notifications-ads-cnet-room.trycloudflare.com/openapi.json`
-Date: 2026-10-28
+Date: 2026-10-30
 
 ## Summary
 
 | Swagger ops | Covered | Partial | Missing | Deferred |
 |-------------|---------|---------|---------|----------|
-| 85 | 48 | 12 | 22 | 3 |
+| 107 | 56 | 15 | 33 | 3 |
 
 ## Gap Details
 
-### Missing (Critical)
-- `GET /api/health` (Gateway)
-- `GET /api/architecture` (Gateway)
-- `GET /api/contracts` (List)
-- `GET /api/flow` (Catalog)
-- `GET /api/flow/edges`
-- `GET /api/flow/downstream/{from}/{to}`
-- `GET /api/flow/upstream/{from}/{to}`
-- `GET /api/filing` (Snapshot)
-- `GET /api/filing/form1065`
-- `GET /api/filing/gates`
-- `GET /api/filing/jobs`
-- `GET /api/filing/datasets`
-- `GET /api/filing/validate/tax`
-- `GET /api/filing/validate/alc`
-- `GET /api/proxy/{SVC}/health` (all services)
-- `GET /api/proxy/{SVC}/contracts` (all services)
-- `GET /api/proxy/{SVC}/flow` (all services)
-- `GET /api/proxy/{SVC}/contracts/downstream` (all services)
-- `GET /api/proxy/{SVC}/contracts/upstream` (all services)
-- `GET /api/proxy/{SVC}/pipeline` (all services)
-- `GET /api/proxy/{SVC}/consume/downstream` (all services)
-- `GET /api/proxy/{SVC}/consume/upstream` (all services)
+### Covered
+- **CT-00 to CT-17**: All producer paths `/api/proxy/{SVC}/contracts/ct-XX/...` are covered.
+- **Peer Flows (CT-05 to CT-17)**: Downstream/Upstream peer paths for these are covered.
+- **Gateway Flow/Contracts**: `/api/flow`, `/api/flow/downstream/{from}/{to}`, `/api/contracts/{id}` are covered.
+- **Filing GETs**: `/api/filing`, `/api/filing/form1065`, `/api/filing/gates`, `/api/filing/jobs`, `/api/filing/datasets` are covered.
+- **Filing POSTs**: `/api/filing/reset`, `/api/filing/run-all`, `/api/filing/run/{stepId}`, `/api/filing/tax/calculate`, `/api/filing/alc/allocate` are covered.
+- **Consume by ID**: `/api/proxy/{SVC}/consume/{contractId}` is covered.
 
 ### Partial
-- `POST /api/filing/upload/{clm|mdm|acc}`: Only 400 (missing file) is covered. 200 (Success) is deferred.
-- `GET /api/proxy/{SVC}/downstream/{peerId}`: Covered via CT-XX peer flow paths for CT-05-17, but not for CT-00-04.
-- `GET /api/proxy/{SVC}/upstream/{peerId}`: Covered via CT-XX peer flow paths for CT-05-17.
+- **Peer Flows (CT-00 to CT-04)**: `GET /api/proxy/{SVC}/downstream/{peerId}` and `upstream` are missing for the first 5 contracts.
+- **Uploads**: `POST /api/filing/upload/{clm|mdm|acc}`: Only 400 (missing file) is covered. 200 (Success) is deferred.
+
+### Missing (P2/P3/P4)
+- **Gateway**: `GET /api/health`, `GET /api/architecture`, `GET /api/contracts` (List), `GET /api/flow/edges`.
+- **Filing Validation**: `GET /api/filing/validate/tax`, `GET /api/filing/validate/alc`.
+- **Service Discovery (All Services)**:
+  - `GET /api/proxy/{SVC}/health`
+  - `GET /api/proxy/{SVC}/contracts`
+  - `GET /api/proxy/{SVC}/flow`
+  - `GET /api/proxy/{SVC}/contracts/downstream`
+  - `GET /api/proxy/{SVC}/contracts/upstream`
+  - `GET /api/proxy/{SVC}/pipeline`
+  - `GET /api/proxy/{SVC}/consume/downstream`
+  - `GET /api/proxy/{SVC}/consume/upstream`
+- **CLM v2 API**: `GET /api/proxy/CLM/v2/engagement`, `PATCH /api/proxy/CLM/v2/engagement`, `GET /api/proxy/CLM/v2/status`.
+- **MDM v2 API**: `GET /api/proxy/MDM/v2/entity`, `GET /api/proxy/MDM/v2/partners`, `GET /api/proxy/MDM/v2/ownership`, `GET /api/proxy/MDM/v2/status`.
 
 ### Deferred
 - `POST /api/filing/upload/clm` (200 OK) - Requires multipart binary .xlsx
