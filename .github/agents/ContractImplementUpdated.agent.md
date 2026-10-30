@@ -23,11 +23,13 @@ You do **not**:
 
 **Overlap rule:** If DiffAuditor lists the same op under both **Missing** and **Mismatch** (stub pact exists but wrong shape), **this agent owns the fix** — refresh the stub to match live so verify passes. Do not defer that op to ContractImplementNew.
 
+**Also owns:** Provider verify failures on **existing** interactions where live proves the pact is on the **wrong service** or wrong status (e.g. `/consume/CT-00` on CLM → 404). Fix by **moving/removing** the bad interaction — not by inventing a 200 body on the producer.
+
 ## When to activate
 
 - User says “fix mismatch”, “update mismatched contracts”, “make mismatch pass”
 - After `SwaggerContractDiffAuditor` reports `mismatch ≥ 1`
-- Provider verify BodyMismatch / status mismatch on a path already in the mismatch table
+- Provider verify BodyMismatch / status mismatch on a path already in the mismatch table **or** clear wrong-role consume failures (see R2b)
 
 ## Input (required)
 
@@ -78,20 +80,31 @@ Success criteria for that endpoint:
 - Provider verify green for that interaction against the report host  
 - Re-check: endpoint no longer appears under DiffAuditor **mismatch** (may still be “missing” only if DiffAuditor recounts stubs — after a real body, both should clear)
 
+### R2b — Wrong-role `/consume/{contractId}` (do not “shape-fix” on producer)
+When live returns **404** with `"Service {X} does not consume CT-YY"` (or equivalent):
+
+1. Look up `CT-YY` in `src/catalog/contracts.ts` — **consumer** vs **producer**.
+2. `/consume/{CT-id}` belongs on **`ct.consumer`** only (example: CT-00 → **MDM**, never CLM).
+3. **Correct fix:** remove the bad interaction from the producer pact (`TaxMesh-*-TaxMesh-{producer}`) and ensure a correct interaction exists on the consumer provider (see `consume-by-id.consumer.spec.ts` / `TaxMesh-Client`→`TaxMesh-{consumer}`).
+4. **Wrong fix:** changing the producer pact to expect 200 + `{ contractId, payload }` against live 404, or “matching” the error body as success without moving the contract.
+
+Discovery `/consume/downstream|upstream` ≠ `/consume/CT-00` — do not conflate them.
+
 ### R3 — Allowed edits
 
-- `tests/consumer/**` for the mismatched interaction only  
+- `tests/consumer/**` for the mismatched / wrong-role interaction only  
 - `pacts/*.json` via consumer regen (do not hand-edit pacts unless necessary)  
 - `src/matchers/**`, `src/schemas/**`, `testdata/**`, `src/catalog/payloads.ts` when that interaction uses them  
 - `tests/provider/states.ts` if `.given(...)` must change  
 
-Do **not** add brand-new path interactions that never existed (→ `ContractImplementNew`).
+Do **not** add brand-new path interactions that never existed (→ `ContractImplementNew`), except relocating a mis-placed `/consume/{id}` onto `ct.consumer`.
 
 ### R4 — Path mapping
 
 | Swagger / endpoint path | Pact |
 |-------------------------|------|
-| `/api/proxy/{SVC}/…` | Prefer Gateway pact if evidence is Client→Gateway; else service `/…` on `TaxMesh-{SVC}` |
+| `/api/proxy/{SVC}/…` | Prefer Gateway pact if evidence is Client→Gateway; else service `/…` on `TaxMesh-{SVC}` **when SVC is the correct role** |
+| `/api/proxy/{SVC}/consume/{CT-id}` | Provider = **`ct.consumer`** (`TaxMesh-{consumer}`), not the producer |
 | `/api/…` gateway | `TaxMesh-Client` → `TaxMesh-Gateway` |
 
 ### R5 — Verify commands
@@ -135,7 +148,9 @@ Prefer reading `reports/swagger-coverage-latest-slim.json` after — confirm `mi
 - Do not implement the whole Swagger surface  
 - Do not “fix” host **502** capability by weakening status to 502 unless user explicitly wants that contract  
 - Do not ignore `endpoint` / live sample and only edit from memory  
-- Do not expand scope to Missing-only ops  
+- Do not expand scope to Missing-only ops (except stub overlap / wrong-role consume relocate)  
+- Do not keep `GET /consume/CT-XX` on the **producer** when live says that service does not consume it  
+- Do not treat producer 404 “does not consume” as a simple body mismatch to force-fit to 200  
 
 ## Repo pointers
 

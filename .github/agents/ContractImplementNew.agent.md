@@ -51,23 +51,36 @@ For each new op:
 3. Capture sample JSON into `testdata/**` when helpful.
 4. Build MatchersV3 / `deepLike` / catalog payloads from the **live** body.
 
-### R3 — Implementation patterns
+### R3 — CT matrix / `/consume/{contractId}` (mandatory)
+Before adding any produce or consume interaction, read `src/catalog/contracts.ts`:
+
+| Path pattern | Pact **provider** must be | Example CT-00 |
+|--------------|---------------------------|---------------|
+| Produce `/contracts/ct-XX/…`, peer `/downstream|upstream/…` | **`ct.producer`** | CLM produces → provider `TaxMesh-CLM` |
+| **`GET /consume/{contractId}`** (Swagger `/api/proxy/{SVC}/consume/{id}`) | **`ct.consumer` only** | MDM consumes CT-00 → provider `TaxMesh-MDM`, **never CLM** |
+
+- Live `404` + `"Service {X} does not consume CT-YY"` means **wrong service** — do **not** invent a 200 contract on `{X}`.
+- Discovery `/consume/downstream` and `/consume/upstream` (no contract id) are **not** the same as `/consume/{CT-id}` — do not copy CT-00 onto every producer.
+- Prefer `tests/consumer/consume-by-id.consumer.spec.ts` pattern: provider = `SERVICES[ct.consumer]`.
+
+### R4 — Implementation patterns
 - PactV4 + MatchersV3; factories in `src/pact/pactFactory.ts`
 - Prefer extending existing specs:
   - CT edges → `tests/consumer/mdm-*.spec.ts`, `all-contracts.ct05-17…`
-  - Discovery → `service-discovery.consumer.spec.ts`
+  - Consume-by-id → `consume-by-id.consumer.spec.ts` (consumer service only)
+  - Discovery → `service-discovery.consumer.spec.ts` (no `/consume/CT-*` on producers)
   - Gateway → `gateway.*.consumer.spec.ts`
   - New surface (e.g. `/v2/*`) → dedicated `tests/consumer/*-v2.consumer.spec.ts` if needed
 - Register every `.given(...)` in `tests/provider/states.ts`
-- Path mapping: Swagger `/api/proxy/{SVC}/x` → pact `/x` on provider `TaxMesh-{SVC}`
+- Path mapping: Swagger `/api/proxy/{SVC}/x` → pact `/x` on provider `TaxMesh-{SVC}` **only when `{SVC}` is the correct role for that path**
 
-### R4 — Priority within the new list
+### R5 — Priority within the new list
 1. Produce / peer CT paths  
 2. Service `/v2/*` (or other versioned APIs) that return 200 on the target host  
 3. Gateway catalog/flow/filing GETs  
 4. Filing POSTs (upload **200** stays **deferred**)  
 
-### R5 — Verify
+### R6 — Verify
 ```bash
 # Ensure gateway.config.json (or GATEWAY_BASE_URL) matches the swagger host
 npm run sync:gateway   # if you edited gateway.config.json
@@ -77,10 +90,12 @@ npm run test:provider:<svc>   # providers touched by new pacts
 npm run test:swagger-coverage # missing count should drop for implemented ops
 ```
 
-### R6 — Report format
+If provider fails with **does not consume CT-…** / 404 on `/consume/{id}` → you put the interaction on the **producer**; move it to `ct.consumer` (do not weaken matchers).
+
+### R7 — Report format
 1. Host / OpenAPI used  
 2. New ops implemented → files + pact names  
-3. Skipped (502 / deferred) with reason  
+3. Skipped (502 / deferred / wrong-role consume) with reason  
 4. Commands + pass/fail  
 5. Remaining new ops (if any)  
 
@@ -89,16 +104,18 @@ npm run test:swagger-coverage # missing count should drop for implemented ops
 ```text
 1. Load New APIs list (or run SwaggerContractDiffAuditor)
 2. Confirm each op returns 200 JSON on target host
-3. Add testdata + consumer interaction + state handler
-4. npm run test:consumer → npm run test:provider:<svc>
-5. Re-run swagger coverage against same host
-6. Short report
+3. For /consume/{CT-id}: provider = ct.consumer only (catalog check)
+4. Add testdata + consumer interaction + state handler
+5. npm run test:consumer → npm run test:provider:<svc>
+6. Re-run swagger coverage against same host
+7. Short report
 ```
 
 ## Anti-patterns
 
 - Do not “fix” old contracts here (→ `ContractImplementUpdated`)  
 - Do not generate pacts for ops that 502 on the chosen gateway  
+- Do not put `GET /consume/CT-XX` on the **producer** (e.g. CT-00 on CLM)  
 - Do not claim swagger-complete if deferred upload 200 remains  
 
 ## Repo pointers
