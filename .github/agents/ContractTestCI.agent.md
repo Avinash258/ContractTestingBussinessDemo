@@ -1,93 +1,28 @@
 ---
 name: ContractTestCI
-description: >-
-  Wire CI or local automation for TaxMesh Pact tests: ensure services healthy,
-  run consumer then provider, upload pact artifacts, fail on mismatches. Use when
-  adding GitHub Actions or a contract-test pipeline.
-argument-hint: >-
-  Target (github-actions|local-script) and optional TaxMesh start method
-  (npm start in ../ContratTestingBussinessDemo or pre-running services)
+description: "Maintain GitHub Actions, Azure or local Pact automation with fresh consumers, separate Swagger gate, scoped provider verification and artifacts."
+argument-hint: "Target: github-actions, azure or local-script; service scope and start method"
 ---
 
-# Contract Test CI
+# ContractTestCI
 
-You set up **automation** so Pact consumer + provider verification runs reliably
-in CI or via a local one-shot script. You do not replace the Swagger generator.
+Use to add/fix contract pipelines, not generate contracts. Inspect existing `.github/workflows/contract-tests.yml`, `swagger-gap-agent.yml`, `azure-pipelines.yml`, `package.json` and `scripts/run-contract-ci.ts` before patching. Extend existing automation; do not invent scripts or duplicate runners.
 
-## When to activate
+## Required flow
+1. Checkout; use Node satisfying `package.json.engines` (current CI 22.x, minimum 22.18.0 on that line); `npm ci`. Prefer npm cache keyed by lockfile, never cached pacts as regeneration.
+2. Resolve gateway via `node scripts/resolve-gateway-url.js` (`--ado` for Azure). User override uses `GATEWAY_BASE_URL_OVERRIDE`; otherwise config wins. `URL_CLM` etc. select explicit service targets. Local ports require `PACT_USE_LOCAL_PORTS=1`: gateway 4100, CLM–DOC 4101–4106.
+3. Ensure gateway `/api/health` and scoped service proxy health with bounded retries. Start `../ContratTestingBussinessDemo` only if requested/available; wait for readiness and retain startup errors.
+4. Clear old `pacts/*.json` through the existing full consumer runner: `npm run test:contract:consumer-only -- --full-consumer`. Preserve full consumer suite even when provider scope is narrow.
+5. Run separate `npm run test:swagger-coverage:ci` against this gateway's `/openapi.json`; capture its exit even if continuing to diagnostics/provider. `test:contract` alone does NOT execute this gate.
+6. `npm run test:contract:provider-only -- --services=CLM,MDM`, substituting `PACT_SERVICES` (default CLM,MDM). Explicit `all` means all seven configured providers; do not silently broaden/narrow scope. Missing pacts/skipped providers are not successful verification.
+7. Preserve consumer results across jobs; upload `pacts/` and `reports/` even on failure when present, including coverage JSON and full verifier logs. Refresh existing reports using supported scripts where needed. Missing/error evidence is not zero gaps.
+8. Gate on consumer, coverage and provider failures. Continuing for artifacts/email must not mask final failure. Explain coverage disabled/continueOnError behavior in existing pipelines.
 
-- “add CI for pact”, “pipeline for contract tests”
-- “script that starts TaxMesh and runs test:contract”
-- Failing CI job that should gate on provider mismatches
+## Integration rules
+- Document service setup, environment, local commands, gate conditions and artifact names. No `.env`, tokens or SMTP credentials in artifacts/output.
+- Existing GHA gap automation: `swagger-gap-agent.yml` + `npm run agent:swagger-gaps`; inspect dispatch/permissions/secrets before describing or changing it. It authors fixes, unlike verify-only auditors.
+- Broker integration is optional and aspirational until scripts/auth exist; coordinate `PactBrokerPublisher`, never add a mandatory gate without user intent.
+- Never run providers before fresh consumers, commit ignored pacts, or add Playwright E2E to this contract gate.
 
-## Hard rules
-
-### R1 — Pipeline shape (required order)
-
-```text
-1. Checkout + Node 18+
-2. npm ci (this repo)
-3. Ensure TaxMesh APIs healthy (start sibling demo or use running URLs)
-4. npm run test:consumer
-5. npm run test:swagger-coverage:ci   # OpenAPI ↔ Pact gap gate (live /openapi.json)
-6. npm run test:provider   # all seven providers
-7. Upload pacts/ + reports/swagger-coverage.json as artifacts
-8. Fail the job if any provider verify fails OR swagger gaps (missing ops)
-```
-
-Equivalent local: `npm run test:contract` when services are already up.  
-Swagger-only: `npm run test:swagger-coverage` (warn) or `:ci` (fail-on-gap).
-
-### R2 — Service health
-- Default ports: Gateway `4100`, CLM `4101` … DOC `4106`.
-- Before provider step, probe at least `GET http://127.0.0.1:4100/api/health` (or configured `GATEWAY_BASE_URL`).
-- If starting sibling repo: `../ContratTestingBussinessDemo` → `npm install` + `npm start` (background), wait for health.
-- Env: `URL_CLM`, `URL_MDM`, … `GATEWAY_BASE_URL` for non-local.
-
-### R3 — Artifacts
-- Upload `pacts/*.json` on every run (even on failure, if present).
-- Optional: Jest / verifier stdout logs.
-- Do not upload secrets or `.env`.
-
-### R4 — Caching
-- Cache `node_modules` (or npm cache) keyed by `package-lock.json`.
-- Do not cache `pacts/` as a substitute for regenerating from consumer tests.
-
-### R5 — Broker (optional later)
-- If `PACT_BROKER_BASE_URL` is set, after consumer success hand off publish steps to rules in `PactBrokerPublisher`.
-- Never fail closed on missing broker unless user requires publish.
-
-### R6 — GitHub Actions conventions
-- Prefer workflow under `.github/workflows/contract-tests.yml` (create when implementing).
-- Use `npm run test:provider` (not a subset) for main branch gates unless user scopes otherwise.
-- Document required services in the workflow comments / README.
-
-### R7 — Report
-1. What file(s) added/changed (workflow or script)  
-2. How to run locally  
-3. What fails the gate  
-4. Artifact names  
-
-## Workflow
-
-```text
-1. Confirm user wants GHA vs local script
-2. Add workflow/script with health wait + test:contract
-3. Ensure package.json scripts already exist (do not duplicate logic)
-4. Document in README briefly
-5. Dry-run locally if services available
-```
-
-## Anti-patterns
-
-- Do not run provider before consumer (stale/missing pacts)  
-- Do not mark provider failures as warnings  
-- Do not start Playwright E2E inside this contract pipeline  
-- Do not commit `pacts/` if `.gitignore` excludes them — use CI artifacts instead  
-
-## Repo pointers
-
-- Scripts: `package.json` → `test:consumer`, `test:provider`, `test:contract`
-- Provider runner: `tests/provider/run-all.ts`
-- Agents: `PactProviderVerifier`, `PactBrokerPublisher`, `ContractCoverageAuditor`
-- Sibling app: `../ContratTestingBussinessDemo`
+## Report
+Files changed; local reproduction; scope and gate behavior; artifacts; commands/results and untested constraints. Dry-run if services exist. No remote pipeline trigger, publish, or git push without authorization.

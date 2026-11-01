@@ -1,85 +1,21 @@
 ---
 name: NewServiceEdgeScaffolder
-description: >-
-  Scaffold a brand-new TaxMesh contract edge (e.g. CT-18) end-to-end: catalog,
-  payload fixture, consumer Pact spec, and provider state handlers. Use when
-  adding a new producer→consumer contract to the CT matrix.
-argument-hint: >-
-  New edge definition: id (CT-XX), producer, consumer, direction
-  (downstream|reverse), path, title, and sample payload fields
+description: "Scaffold a new TaxMesh CT edge: catalog, JSON fixture, consumer interactions and provider states."
+argument-hint: "CT id, producer, consumer, downstream/reverse, path, title and payload"
 ---
 
-# New Service Edge Scaffolder
+# NewServiceEdgeScaffolder
 
-You add a **new CT edge** to the Pact framework when the TaxMesh contract matrix
-grows (or when mirroring a new OpenAPI produce path).
+Use for a genuinely new edge; focused existing-edge work belongs to `PactConsumerAuthor`.
 
-## When to activate
+## Workflow and rules
+1. Confirm unused CT id, producer/consumer, direction, path/title and sample from live OpenAPI or business demo `shared/contracts.js`. If intentionally ahead of backend, label WIP and expected provider failure; never reuse an id for a different edge.
+2. Add `ContractDef` to `CONTRACTS` in `src/catalog/contracts.ts`. Store payload in `testdata/contracts/CT-XX.json` (or relevant service JSON), load through `src/testdata/index.ts`, expose via `src/catalog/payloads.ts`. Do not hardcode samples in TS wrappers. Direction is `downstream` or `reverse`; `apiFlow()` maps reverse to API `upstream`.
+3. Use `src/pact/pactFactory.ts`: `createServicePairPact(consumer, producer)`. Extend catalog-driven `tests/consumer/all-contracts.ct05-17.consumer.spec.ts`, including filters for the new id, rather than duplicating suites. Cover produce path AND `/{downstream|upstream}/{consumer}` with `peerFlowBody`/`peerPayloadBody`. For gateway pairs use producer→consumer `from`/`to`; add consume-by-id where applicable.
+4. Register every `.given(...)` in `tests/provider/states.ts`: `{producer} produces {id} for {consumer}`, `{producer} has downstream|upstream contracts to {consumer}`, relevant `downstream edge {from} to {to} exists`/upstream, and `{consumer} can consume {id} from {producer}`. Use actual spec strings; noop/seed as required.
+5. Existing services use existing verifiers filtered by `provider.name` (`src/pact/listPacts.ts`). New service only: extend `SERVICES` (port/name/key/pactProvider), add verifier and `test:provider:<svc>`, update `tests/provider/run-all.ts` AND configured orchestration provider lists in `scripts/run-contract-ci.ts`; inspect CI scoping and factory types too.
+6. Run `npm run test:consumer`, then `npm run test:provider:<producer>` and consumer service if consume-by-id was added. Full seven-provider proof uses `npm run test:provider`; state actual scope. Resolve user URL with `GATEWAY_BASE_URL_OVERRIDE`, otherwise gateway config. Never hand-edit generated pacts or weaken matchers to hide backend failure.
+7. For Swagger-derived edges run `npm run test:swagger-coverage:ci` and refresh `docs/SWAGGER_GAP_COVERAGE.md`; document remaining/deferred operations.
 
-- “add CT-18”, “new ACC→DOC contract”
-- OpenAPI gained a new `/contracts/ct-*` produce path
-- User provides producer, consumer, path, and payload shape
-
-## Hard rules
-
-### R1 — Confirm the edge exists (or is intentional)
-- Prefer live OpenAPI / TaxMesh `CONTRACTS` in the business demo before inventing.
-- If the backend does not expose the path yet, scaffold Pact **and** call out that provider verify will fail until the service implements it.
-
-### R2 — Update catalog (required)
-1. [`src/catalog/contracts.ts`](../../src/catalog/contracts.ts) — add `ContractDef` to `CONTRACTS`.
-2. [`src/catalog/payloads.ts`](../../src/catalog/payloads.ts) — add `PAYLOADS['CT-XX']` sample matching live/demo shape.
-3. Direction: `downstream` or `reverse` (API flow `upstream` via `apiFlow()`).
-
-### R3 — Consumer coverage
-- Prefer extending catalog-driven specs (`all-contracts.ct05-17.consumer.spec.ts` pattern or raise the filter to include the new id).
-- Also cover peer flow: `GET /{downstream|upstream}/{consumer}` with `peerFlowBody` + `peerPayloadBody`.
-- Naming: `createServicePairPact(consumer, producer)`.
-
-### R4 — Provider states
-Register in [`tests/provider/states.ts`](../../tests/provider/states.ts):
-
-- `{producer} produces {id} for {consumer}`
-- `{producer} has downstream|upstream contracts to {consumer}`
-- If gateway flow pair: `downstream edge {from} to {to} exists` / upstream equivalent
-- If consume-by-id: `{consumer} can consume {id} from {producer}`
-
-Providers are already included in `npm run test:provider` via pact file filter — no new verify script unless a **new service** appears.
-
-### R5 — New service (rare)
-If producer/consumer is not in `SERVICES`:
-
-- Add to `SERVICES` in `contracts.ts` (port, `pactProvider`, key, name)
-- Add `test:provider:<svc>` script + `tests/provider/<svc>.provider.verify.ts`
-- Add to `tests/provider/run-all.ts`
-
-### R6 — Verify
-```bash
-npm run test:consumer
-npm run test:provider:<producer>   # and consumer service if consume-by-id added
-```
-Update [`docs/SWAGGER_GAP_COVERAGE.md`](../../docs/SWAGGER_GAP_COVERAGE.md) if the edge came from Swagger.
-
-## Workflow
-
-```text
-1. Capture id / producer / consumer / direction / path / title / payload
-2. Confirm OpenAPI or demo contracts.js (or document WIP)
-3. Patch catalog + payloads
-4. Extend consumer specs (produce + peer ± consume)
-5. Register states
-6. test:consumer → test:provider
-7. Report new pact pair + CT id
-```
-
-## Anti-patterns
-
-- Do not reuse an existing CT id for a different producer/consumer  
-- Do not skip peer-flow coverage for matrix edges  
-- Do not add gateway flow-pair tests with wrong `from`/`to` (producer→consumer)  
-
-## Repo pointers
-
-- Matrix reference: TaxMesh `shared/contracts.js` in `../ContratTestingBussinessDemo`
-- Factories: `src/pact/pactFactory.ts`
-- After scaffold, use `PactProviderVerifier` / `PactFailureDoctor` if red
+## Report
+CT id and new pact pair; files changed; producer/consumer direction; commands, exits and verification scope; WIP/blockers. Failures: `PactProviderVerifier` / `PactFailureDoctor`. Do not claim green without execution evidence.

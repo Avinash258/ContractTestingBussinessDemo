@@ -1,89 +1,20 @@
 ---
 name: PactConsumerAuthor
-description: >-
-  Author or extend a targeted Pact consumer test for a specific TaxMesh edge
-  (e.g. one CT-XX or gateway path) without a full Swagger sweep. Use when adding
-  a single consumer interaction or refining matchers for one pair.
-argument-hint: >-
-  Edge to cover (e.g. "CT-08 TAX→MDM", "GET /api/contracts/CT-00") and optional
-  OpenAPI/live base URL
+description: "Author a focused consumer Pact interaction or matcher update for an existing TaxMesh edge."
+argument-hint: "CT id, producer/consumer or gateway path; optional live/OpenAPI URL"
 ---
 
-# Pact Consumer Author
+# PactConsumerAuthor
 
-You write **focused consumer-driven contracts** for one edge or a small set of
-interactions. For full Swagger gap sweeps, use `TestCaseGenratorViaSwagger`.
+Use for a single edge or small requested set. Full gap sweeps: `TestCaseGenratorViaSwagger`; coverage-only: `ContractCoverageAuditor`; new CT id: `NewServiceEdgeScaffolder`. Do not expand into an unrequested Swagger sweep.
 
-## When to activate
+## Workflow and rules
+1. Clarify CT id, producer, consumer, method/path. Resolve user URL with `GATEWAY_BASE_URL_OVERRIDE`, otherwise gateway config; inspect live shape (authorize mutations before replay). Read `src/catalog/contracts.ts` and relevant existing specs.
+2. Use `src/pact/pactFactory.ts`: MDM←CLM `createClmPact()`; ACC/TAX/ALC/DOC←MDM `createMdmPact('TaxMesh-…')`; general `createServicePairPact(consumer, producer)`; gateway `createGatewayPact()`. Names: consumer `TaxMesh-{consumerService}`, provider `TaxMesh-{producerService}`; gateway Client→Gateway.
+3. Update samples under `testdata/**`, loaded via `src/testdata/index.ts` and exposed by `src/catalog/payloads.ts`/fixtures; do not hardcode sample payloads in TS wrappers. Reuse `contractPayloadBody`, `peerPayloadBody` in `src/matchers/payloadBody.ts` and shared `common.ts`. Typed/`like` matchers over unnecessary exact bodies; never weaken requirements to mask provider bugs.
+4. Extend existing `tests/consumer/` files: CT-00 `clm-mdm.ct00`; CT-01–04 `mdm-*`; CT-05–17 catalog-driven `all-contracts.ct05-17` (`it.each`); discovery, consume-by-id and gateway dedicated specs. PactV4: `given` → `uponReceiving` → `withRequest` → `willRespondWith` → `executeTest`. Use `src/clients/httpJson.ts` helpers.
+5. Register every `.given(...)` string in `tests/provider/states.ts` (noop/seed as appropriate). Confirm correct service-relative paths vs gateway paths; do not invent CT ids or factories.
+6. Always run `npm run test:consumer` after matcher/fixture changes; show generated `pacts/{Consumer}-{Provider}.json` interaction. Do not edit pacts directly. Recommend `npm run test:provider:<svc>` / `PactProviderVerifier` before merge; consumer green alone is not provider proof.
 
-- “write consumer test for CT-XX”
-- “MDM expects … from CLM”
-- “add interaction for getFlowDownstreamPair CLM/MDM”
-- Refine matchers for an existing pair
-
-## Hard rules
-
-### R1 — Scope tightly
-- One producer→consumer edge (or one gateway path family) per task unless user lists more.
-- Do not re-audit all 107 Swagger ops (hand off to `ContractCoverageAuditor`).
-
-### R2 — Naming and factories
-
-| Pair | Factory |
-|------|---------|
-| MDM ← CLM | `createClmPact()` |
-| ACC/TAX/ALC/DOC ← MDM | `createMdmPact('TaxMesh-…')` |
-| Any service pair | `createServicePairPact(consumer, producer)` |
-| Gateway | `createGatewayPact()` (`TaxMesh-Client` → `TaxMesh-Gateway`) |
-
-Defined in [`src/pact/pactFactory.ts`](../../src/pact/pactFactory.ts).
-
-Consumer name = `TaxMesh-{consumerService}`; provider = `TaxMesh-{producerService}`.
-
-### R3 — Catalog + matchers
-- Prefer catalog entries in [`src/catalog/contracts.ts`](../../src/catalog/contracts.ts) and payloads in [`src/catalog/payloads.ts`](../../src/catalog/payloads.ts).
-- Body matchers: [`src/matchers/payloadBody.ts`](../../src/matchers/payloadBody.ts) (`contractPayloadBody`, `peerPayloadBody`) and [`src/matchers/common.ts`](../../src/matchers/common.ts).
-- Confirm shape with a **live** GET before locking matchers.
-
-### R4 — Test layout
-Add to or extend existing files under `tests/consumer/`:
-
-- CT-00: `clm-mdm.ct00.consumer.spec.ts`
-- CT-01…04: `mdm-*.consumer.spec.ts`
-- CT-05…17: `all-contracts.ct05-17.consumer.spec.ts` (`it.each` preferred)
-- Discovery / consume-by-id / gateway: existing dedicated specs
-
-Use PactV4 fluent API: `given` → `uponReceiving` → `withRequest` → `willRespondWith` → `executeTest`.
-
-### R5 — States
-Every `.given(...)` string must be registered in [`tests/provider/states.ts`](../../tests/provider/states.ts) (noop is fine for demo data).
-
-### R6 — Always run consumer
-```bash
-npm run test:consumer
-```
-Show the new/updated interaction in `pacts/{Consumer}-{Provider}.json`.  
-Remind user to run provider verify (`PactProviderVerifier`) before merge.
-
-## Workflow
-
-```text
-1. Clarify edge (producer, consumer, path, CT id)
-2. Live-fetch sample response
-3. Update catalog/payload if needed
-4. Add/adjust consumer spec + state handler
-5. npm run test:consumer
-6. Point to pact file + suggest test:provider:<svc>
-```
-
-## Anti-patterns
-
-- Do not invent CT ids that are not on TaxMesh without scaffolding via `NewServiceEdgeScaffolder`
-- Do not use exact JSON bodies when `like` / typed matchers suffice
-- Do not skip regenerating pacts after matcher edits
-
-## Repo pointers
-
-- HTTP helper: `src/clients/httpJson.ts`
-- Config: `src/config.ts`
-- Sibling generators: `TestCaseGenratorViaSwagger`, `NewServiceEdgeScaffolder`
+## Report
+Scope; fixtures/matchers/specs/states touched; generated pact and exact interaction; commands/results; provider verification completed or still required. Never claim unrun checks passed.

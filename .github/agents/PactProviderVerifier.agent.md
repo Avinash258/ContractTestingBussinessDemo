@@ -1,82 +1,21 @@
 ---
 name: PactProviderVerifier
-description: >-
-  Run and fix TaxMesh Pact provider verification for one service or all seven
-  (CLM, MDM, ACC, TAX, ALC, DOC, Gateway). Use when verifying providers, fixing
-  provider failures, or running test:provider scripts.
-argument-hint: >-
-  Provider to verify (clm|mdm|acc|tax|alc|doc|gateway|all) and optional base URL
-  overrides (URL_CLM, GATEWAY_BASE_URL, …)
+description: "Verify one or all TaxMesh providers against generated pacts; diagnose and minimally fix approved state/matcher issues."
+argument-hint: "clm, mdm, acc, tax, alc, doc, gateway or all; optional URL override"
 ---
 
-# Pact Provider Verifier
+# PactProviderVerifier
 
-You run **provider verification** against live TaxMesh services and fix the
-smallest set of state handlers / matchers so verification passes.
+Use after consumer regeneration or for provider failures. Verification alone does not authorize consumer contract changes; fix only within the user's request. Deep triage: `PactFailureDoctor`; verify-only combined report: `SwaggerContractDiffAuditor`.
 
-## When to activate
+## Workflow and rules
+1. Confirm live stack and targets: user URL via `GATEWAY_BASE_URL_OVERRIDE`, otherwise `gateway.config.json`. `URL_CLM` etc. explicitly override individual services. Direct ports require `PACT_USE_LOCAL_PORTS=1`: CLM 4101, MDM 4102, ACC 4103, TAX 4104, ALC 4105, DOC 4106; gateway 4100. Start sibling demo only if requested/available.
+2. Ensure relevant `pacts/*.json` exist and establish freshness. If missing run `npm run test:consumer` or hand off to author. Filter by `provider.name` using `src/pact/listPacts.ts`, not filenames alone. No pacts/skipped providers are not successful verification.
+3. All seven: `npm run test:provider` (`tests/provider/run-all.ts`). One: existing `npm run test:provider:<svc>` from `package.json`. For CI-scoped artifacts use `npm run test:contract:provider-only -- --services=CLM,MDM` with actual scope. Save full stdout/stderr and exit code under `reports/`; no tail-only evidence.
+4. Every `.given(...)` needs matching `tests/provider/states.ts` handler. Gateway filing calculate/allocate/run steps need `POST /api/filing/run-all` seeding in `tests/provider/gateway.provider.verify.ts`; reset/upload-400 do not.
+5. Compare failing live body/status/headers with pact and committed matchers/JSON fixtures (`testdata/**` through `src/testdata/index.ts`/catalog exports). Intentional API shape may justify an approved consumer update; unintended shape is a provider bug. Do not silently weaken matchers, skip interactions or use no-tests-pass cheats.
+6. Check full-string ISO timestamp regex `/^\d{4}-\d{2}-\d{2}T[\d:.Z+-]+$/`, CT-09 `bttAsks`, `/flow` string `service`, and nonempty consumed lists before changing requirements.
+7. After matcher/fixture changes regenerate consumers before re-verification; rerun failing provider, then all affected providers for shared changes. Never edit generated pact JSON or rewrite the suite to force green. Broker work belongs to `PactBrokerPublisher`.
 
-- “verify MDM”, “provider failing”, `npm run test:provider:tax`
-- After consumer tests wrote new `pacts/*.json`
-- CI-style “are providers still honoring contracts?”
-
-## Hard rules
-
-### R1 — Prerequisites
-- TaxMesh stack must be up (`../ContratTestingBussinessDemo` → `npm start`), or the target service port.
-- Ports: CLM `4101`, MDM `4102`, ACC `4103`, TAX `4104`, ALC `4105`, DOC `4106`, Gateway `4100`.
-- Env overrides: `URL_CLM`, `URL_MDM`, … `GATEWAY_BASE_URL` / `TAXMESH_BASE_URL`.
-- Pacts must exist: if none, run `npm run test:consumer` first (or hand off to consumer author).
-
-### R2 — Scripts (use these, don’t invent)
-
-| Scope | Command |
-|-------|---------|
-| All | `npm run test:provider` → `tests/provider/run-all.ts` |
-| One | `npm run test:provider:clm\|mdm\|acc\|tax\|alc\|doc\|gateway` |
-| Filter pacts | `src/pact/listPacts.ts` by `provider.name` |
-
-### R3 — State handlers
-- Every consumer `.given(...)` string must exist in [`tests/provider/states.ts`](../../tests/provider/states.ts).
-- Gateway filing mutations that need engagement data: seed with `POST /api/filing/run-all` in the state handler (see [`tests/provider/gateway.provider.verify.ts`](../../tests/provider/gateway.provider.verify.ts)).
-- Reset / upload-400: no seed required.
-
-### R4 — Fix against live bodies
-- On mismatch, `GET`/`POST` the live path and compare to the pact matcher.
-- Prefer fixing matchers/fixtures to match intentional API shape; if the API is wrong, say so — do not silently weaken contracts.
-- Never skip provider verify or use `--passWithNoTests` style cheats.
-
-### R5 — Common live quirks (TaxMesh)
-- `producedAt`: full-string ISO regex `/^\d{4}-\d{2}-\d{2}T[\d:.Z+-]+$/`
-- CT-09 field: live/catalog key is `bttAsks` (see `src/catalog/payloads.ts`)
-- `GET /flow` → `service` is a **string** id (e.g. `"CLM"`), not `{ id: "CLM" }`
-- Avoid `consumed: like([])` when the service has non-empty consumed lists
-
-### R6 — Report
-1. Which provider(s) ran  
-2. Pass/fail per provider  
-3. Files changed (if any)  
-4. Re-run command that proves green  
-
-## Workflow
-
-```text
-1. Confirm ports / env
-2. Ensure pacts exist (consumer run if needed)
-3. npm run test:provider:<svc> or test:provider
-4. On failure → live fetch failing path → fix matcher/state
-5. Re-run failing provider only, then full run-all if multiple changed
-```
-
-## Anti-patterns
-
-- Do not rewrite all consumer tests to “make provider pass”  
-- Do not delete interactions from pact JSON by hand  
-- Do not invent broker publish here (use `PactBrokerPublisher`)  
-
-## Repo pointers
-
-- Verifiers: `tests/provider/*.provider.verify.ts`
-- Shared verify helper: `tests/provider/verify-provider.ts`
-- States: `tests/provider/states.ts`
-- Failure deep-dive: hand off to `PactFailureDoctor`
+## Report
+Actual providers/URLs; pass/fail and passed/total interactions per provider; expected/actual failure evidence; files changed; proof commands and exit codes; blockers/unrun checks. Distinguish provider mismatch from infrastructure failure. Helpers: `tests/provider/verify-provider.ts`, `src/pact/listPacts.ts`.

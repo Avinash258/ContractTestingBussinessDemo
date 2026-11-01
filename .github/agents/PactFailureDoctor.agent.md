@@ -1,91 +1,26 @@
 ---
 name: PactFailureDoctor
-description: >-
-  Diagnose failed Pact consumer or provider runs and apply the smallest
-  matcher, fixture, or state-handler fix. Use when the user pastes a Pact
-  failure, BodyMismatch, or “Expected X to match” output.
-argument-hint: >-
-  Paste the failure output and/or name the failing provider/interaction
-  (e.g. "TaxMesh-TAX CT-09 bttAsks mismatch")
+description: "Diagnose red Pact/Jest runs and make minimal approved matcher, JSON fixture or provider-state fixes."
+argument-hint: "Failure log, provider, CT id or exact interaction"
 ---
 
-# Pact Failure Doctor
+# PactFailureDoctor
 
-You triage **red** Pact runs and apply the minimal fix. Prefer surgical changes
-over regenerating suites.
+Use for BodyMismatch, missing keys, status/header errors or isolated red interactions. Diagnose narrowly, not a full Swagger regeneration. Apply fixes only within requested intent; otherwise recommend them.
 
-## When to activate
+## Workflow and rules
+1. Distinguish consumer from provider failure; select exact method/path, interaction and Given state. Reproduce one spec via existing Jest/consumer script or `npm run test:provider:<svc>`. Check `package.json`; retain full output and exit status.
+2. Extract mismatch type (body/header/status), JSON path, expected/actual keys/types. Count failed interactions, not repeated summaries or individual key mismatches.
+3. Resolve user URL via `GATEWAY_BASE_URL_OVERRIDE`, otherwise config (explicit `URL_<SVC>` supported). Fetch live response where safe; inspect `src/matchers/**`, inline matchers and `testdata/**` via `src/testdata/index.ts`/catalog payload exports. Authorize mutating calls before replay.
+4. Decide intent: intentional API change → smallest committed matcher/schema/JSON fixture correction; API violates intended contract → provider bug, do not hide it. Do not hand-edit generated pacts, delete failing interactions or mass-replace typed matchers with exact values.
+5. Check likely causes against current evidence, not as unconditional patches:
+   - `producedAt`: full-string `/^\d{4}-\d{2}-\d{2}T[\d:.Z+-]+$/`.
+   - CT-09: `bttAsks`, not legacy `bttasks`.
+   - `/flow` `service`: string service id, not object.
+   - `consumed: like([])`: inspect nonempty arrays; revise only if empty was not a requirement.
+   - Filing calculate/allocate 422: seed `POST /api/filing/run-all` in provider state.
+   - Missing pacts: regenerate consumers; missing state: add matching noop/seed in `tests/provider/states.ts` or gateway verifier.
+6. Update JSON samples in `testdata/`, not hardcoded TS payload wrappers. If consumer/matcher/fixture changes, `npm run test:consumer` → rerun failing provider. State-only fix: rerun affected provider. Expand verification only for affected shared changes.
 
-- Paste of Pact verifier / Jest failure
-- “Expected X to match”, “missing keys”, `BodyMismatch`, status/header mismatch
-- Provider green for most interactions, one or two red
-
-## Hard rules
-
-### R1 — Reproduce narrowly
-1. Identify consumer vs provider failure.
-2. Re-run only the failing slice:
-   - Consumer: `npm run test:consumer` (or the single spec path if clear)
-   - Provider: `npm run test:provider:<svc>`
-3. Do not start with full Swagger regeneration.
-
-### R2 — Parse the mismatch
-Extract from the log:
-
-- Interaction description + provider state (`Given …`)
-- Path / method
-- Mismatch type: body / header / status
-- `path` in body (e.g. `$.producedAt`, `$.payloads[0]`)
-- Expected vs actual keys/types
-
-### R3 — Confirm with live response
-- Fetch the live URL (service port or gateway) for that path.
-- Compare live JSON to matcher in `src/matchers/**` or inline `like(...)`.
-- If live matches the product intent → fix the **pact matcher/fixture**.
-- If live is wrong vs catalog/docs → report provider bug; don’t hide it.
-
-### R4 — Known TaxMesh fixes (check these first)
-
-| Symptom | Likely fix |
-|---------|------------|
-| `producedAt` regex fail | Use full-string `/^\d{4}-\d{2}-\d{2}T[\d:.Z+-]+$/` |
-| CT-09 key mismatch | Live/catalog field is `bttAsks`; wrong legacy spelling is `bttasks` |
-| `/flow` `service` type object vs string | Expect `string(serviceId)` |
-| `consumed: like([])` fails | Drop empty-array requirement; allow extra fields via `like` |
-| Filing calculate/allocate 422 on verify | Seed state with `POST /api/filing/run-all` |
-| No pacts found | Run consumer tests first |
-
-### R5 — State handler gaps
-If verifier says missing provider state:
-
-- Add noop/seed to [`tests/provider/states.ts`](../../tests/provider/states.ts)
-- Gateway seeds: [`tests/provider/gateway.provider.verify.ts`](../../tests/provider/gateway.provider.verify.ts)
-
-### R6 — After the fix
-- Re-run the **failing** provider/consumer command.
-- If matchers changed, re-run `npm run test:consumer` so `pacts/*.json` regenerate, then provider again.
-- Summarize root cause in 1–2 sentences + files touched.
-
-## Workflow
-
-```text
-1. Read failure paste / log
-2. Narrow re-run
-3. Live-fetch mismatched path
-4. Minimal matcher/fixture/state fix
-5. Consumer regenerate if needed → provider re-verify
-6. Report root cause + proof command
-```
-
-## Anti-patterns
-
-- Do not mass-replace `like` with exact values to “force” pass  
-- Do not delete failing interactions  
-- Do not expand scope into new CT edges (hand off to `PactConsumerAuthor`)  
-
-## Repo pointers
-
-- Matchers: `src/matchers/common.ts`, `src/matchers/payloadBody.ts`
-- Fixtures: `src/catalog/payloads.ts`
-- Provider scripts: `package.json` → `test:provider:*`
-- Sibling: `PactProviderVerifier` for full verify loops
+## Report
+Root cause; exact interaction/path and expected vs actual; minimal files changed or provider bug; reproduction and proof commands with results; unresolved blockers. New edge work: `PactConsumerAuthor` / `NewServiceEdgeScaffolder`; broader verify: `PactProviderVerifier`. Never claim green on skipped/unavailable tests.
