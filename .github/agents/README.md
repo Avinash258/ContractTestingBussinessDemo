@@ -1,34 +1,66 @@
 # Contract-testing agents
 
-GitHub Copilot custom-agent definitions for the TaxMesh Pact framework. Each agent is self-contained; Azure retrieval and historical fixtures load only when needed. Existing names are preserved for caller compatibility.
+Cursor / Copilot custom agents for the TaxMesh Pact framework in this repo.
+Each `.agent.md` is self-contained. Prefer the DiffAuditor → New / Updated flow for Swagger gaps.
 
-| Agent | Use |
-|---|---|
-| [FrameworkAuditor](FrameworkAuditor.agent.md) | Read-only agent/CI/config/testdata drift audit |
-| [ContractCoverageAuditor](ContractCoverageAuditor.agent.md) | Read-only OpenAPI coverage; no suite regeneration |
-| [SwaggerContractDiffAuditor](SwaggerContractDiffAuditor.agent.md) | Fresh CI-parity coverage + scoped provider report; or Azure evidence |
-| [TestCaseGenratorViaSwagger](TestCaseGenratorViaSwagger.agent.md) | Generate requested Swagger coverage gaps |
-| [PactConsumerAuthor](PactConsumerAuthor.agent.md) | Targeted existing-edge consumer authoring |
-| [NewServiceEdgeScaffolder](NewServiceEdgeScaffolder.agent.md) | New CT edge end-to-end |
-| [PactProviderVerifier](PactProviderVerifier.agent.md) | Verify providers; fix only requested issues |
-| [PactFailureDoctor](PactFailureDoctor.agent.md) | Narrow failure diagnosis and approved fixes |
-| [BreakingChangeDetector](BreakingChangeDetector.agent.md) | API change compatibility analysis |
-| [PactBrokerPublisher](PactBrokerPublisher.agent.md) | Local validation; Broker operations only with actual tooling/auth |
-| [ContractTestCI](ContractTestCI.agent.md) | Maintain existing GHA/Azure/local automation |
+| Agent | Role |
+|-------|------|
+| [SwaggerContractDiffAuditor](./SwaggerContractDiffAuditor.agent.md) | **Verify-only CI parity**: full-consumer regen → swagger coverage → scoped provider; writes `reports/swagger-contract-diff.json` |
+| [ContractImplementNew](./ContractImplementNew.agent.md) | Implement **missing/new** OpenAPI ops (durable consumer source) |
+| [ContractImplementUpdated](./ContractImplementUpdated.agent.md) | Fix **real** provider Body/Status mismatches on existing interactions |
+| [ContractCoverageAuditor](./ContractCoverageAuditor.agent.md) | Read-only OpenAPI ↔ Pact coverage (`npm run test:swagger-coverage`) |
+| [FrameworkAuditor](./FrameworkAuditor.agent.md) | Read-only agents / CI / scripts / `testdata/` drift |
+| [TestCaseGenratorViaSwagger](./TestCaseGenratorViaSwagger.agent.md) | Legacy full Swagger sweep → generate gaps |
+| [PactConsumerAuthor](./PactConsumerAuthor.agent.md) | Targeted consumer edge authoring |
+| [NewServiceEdgeScaffolder](./NewServiceEdgeScaffolder.agent.md) | New CT edge end-to-end |
+| [PactProviderVerifier](./PactProviderVerifier.agent.md) | Run / diagnose provider verification |
+| [PactFailureDoctor](./PactFailureDoctor.agent.md) | Narrow BodyMismatch / red-run diagnosis |
+| [BreakingChangeDetector](./BreakingChangeDetector.agent.md) | Breaking vs non-breaking API change analysis |
+| [PactBrokerPublisher](./PactBrokerPublisher.agent.md) | Broker publish / can-i-deploy (when tooling exists) |
+| [ContractTestCI](./ContractTestCI.agent.md) | Maintain GHA / Azure / local contract automation |
 
-## Routing and execution
+**Companions (not standalone “execute” agents):**
 
-- Framework consistency → FrameworkAuditor. Coverage only → ContractCoverageAuditor. Fresh coverage plus actual provider failures → SwaggerContractDiffAuditor.
-- Generate/fix only on request. Existing interaction → PactConsumerAuthor/PactFailureDoctor; new edge → NewServiceEdgeScaffolder. Verify-only agents never implement changes.
-- Auditor report handoff labels `ContractImplementNew` and `ContractImplementUpdated` are conceptual action categories, **not installed agents**. Route new missing-operation coverage to TestCaseGenratorViaSwagger/PactConsumerAuthor (new CT edge: NewServiceEdgeScaffolder); updates to PactFailureDoctor/PactConsumerAuthor after intent review.
-- User gateway URL takes precedence via `GATEWAY_BASE_URL_OVERRIDE`; otherwise `gateway.config.json`. No agent pins a temporary Cloudflare hostname. Use package engine-compatible Node (current 22.x CI; minimum 22.18.0 on that line).
-- CI parity: full-consumer regeneration → separate Swagger gate → scoped provider verification. Default provider scope CLM,MDM; all-provider proof requires explicit all-seven verification. `test:contract` alone does **not** run Swagger coverage.
-- GHA authoring automation is separate: `.github/workflows/swagger-gap-agent.yml` + `npm run agent:swagger-gaps`; it is not the verify-only auditor.
+- [SwaggerContractDiffAuditor.azure.md](./SwaggerContractDiffAuditor.azure.md) — Azure build / log replay  
+- [SwaggerContractDiffAuditor.regression.md](./SwaggerContractDiffAuditor.regression.md) — historical fixtures only  
 
-## Azure and reports
+**GHA automation (not a Cursor agent):** [`.github/workflows/swagger-gap-agent.yml`](../workflows/swagger-gap-agent.yml) + `npm run agent:swagger-gaps`.
 
-[Azure companion](SwaggerContractDiffAuditor.azure.md): load for uploaded CI logs, exact build URL, or `azure latest`. Automatic reads require configured authenticated Azure access, organization/project/definition and branch; never put credentials in prompts. Pin one completed build; pipeline status alone is not a contract verdict. No triggering/editing pipelines.
+## Ownership — which agent fixes what
 
-[Historical fixture](SwaggerContractDiffAuditor.regression.md): explicit regression requests only, never current-run authority.
+| Symptom | Agent |
+|---------|--------|
+| `Missing OpenAPI ops` / no durable consumer (e.g. `GET /api/proxy/CLM/v2/status`) | **ContractImplementNew** |
+| Real BodyMismatch / StatusMismatch (named endpoint + field, e.g. `legalName` vs `entityName`) | **ContractImplementUpdated** |
+| CI email Provider **0/2**, Actual is `(OK)` console scraps, endpoint `—` | **Neither** — fix `scripts/run-contract-ci.ts` (`PROVIDER_RESULT_FILE` parse) |
+| Coverage totals only, no implement | **ContractCoverageAuditor** / DiffAuditor **coverage only** |
 
-Auditor outputs `reports/swagger-contract-diff.json`, coverage and exact interaction failure rows, plus full provider output at `reports/_diff-provider-out.txt`. Missing evidence stays INCOMPLETE, not zero or PASS. Changes here do not implement missing Broker tooling or alter pipeline behavior.
+## Suggested order
+
+1. **SwaggerContractDiffAuditor** (`execute` / match CI) — report only  
+2. **ContractImplementNew** and/or **ContractImplementUpdated** — only when you want fixes  
+3. Re-run DiffAuditor (or provider-only + swagger-coverage) to confirm  
+4. **PactFailureDoctor** if a real verifier failure remains unclear  
+
+## Gateway & CI parity
+
+- User URL → `GATEWAY_BASE_URL_OVERRIDE`; else [`gateway.config.json`](../../gateway.config.json).  
+- DiffAuditor local sequence: clear `pacts/*.json` → `npm run test:contract:consumer-only -- --full-consumer` → swagger coverage → provider `--services=CLM,MDM` (or `PACT_SERVICES`).  
+- `npm run test:contract` alone does **not** run the Swagger coverage gate.  
+- Artifact: `reports/swagger-contract-diff.json` + `reports/_diff-provider-out.txt`.
+
+## Remotes (agents on main)
+
+This workspace often has two GitHub remotes:
+
+| Remote | Repo | Typical use |
+|--------|------|-------------|
+| `azure` | `Avinash258/ContractTestingDemoProject` | Azure DevOps + public DemoProject |
+| `origin` | `Avinash258/ContractTestingBussinessDemo` | Local `main` tracking |
+
+Agents committed only on `origin/main` or feature branches (`fixBranch`, `fixV2`) **will not appear** on DemoProject [`main` commits](https://github.com/Avinash258/ContractTestingDemoProject/commits/main) until you merge/push:
+
+```bash
+git push azure main
+# or: PR from fixBranch/fixV2 → main on ContractTestingDemoProject
+```

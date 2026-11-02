@@ -45,10 +45,25 @@ npm run test:contract
 
 Override bases: `URL_CLM`, `URL_MDM`, … `GATEWAY_BASE_URL` / `TAXMESH_BASE_URL`.
 
+## Cursor agents (Swagger gaps)
+
+Custom agents live under [`.github/agents/`](.github/agents/) — see [`.github/agents/README.md`](.github/agents/README.md) for the full catalog.
+
+| Flow | Agent |
+|------|--------|
+| Audit (CI parity, verify-only) | [`SwaggerContractDiffAuditor`](.github/agents/SwaggerContractDiffAuditor.agent.md) |
+| Add missing OpenAPI coverage | [`ContractImplementNew`](.github/agents/ContractImplementNew.agent.md) |
+| Fix real provider BodyMismatch | [`ContractImplementUpdated`](.github/agents/ContractImplementUpdated.agent.md) |
+
+Typical order: **DiffAuditor → New and/or Updated → DiffAuditor again**.
+
+**Note:** This clone may track `origin` = BusinessDemo while Azure CI uses `azure` = [ContractTestingDemoProject](https://github.com/Avinash258/ContractTestingDemoProject). Push/merge agents to **DemoProject `main`** (`git push azure main` or PR) or they will not show on that repo’s main commits page.
+
 ## Azure DevOps pipeline (EY_Demo-style gate + HTML report)
 
 Pipeline: [`azure-pipelines.yml`](azure-pipelines.yml)  
-Pattern matches `InnoVisionDA/EY_Demo` contract gate: **Consumer → Provider → HTML/email report**.
+Pattern matches `InnoVisionDA/EY_Demo` contract gate: **Consumer → Provider → HTML/email report**.  
+Ensure the runner parse fix (`PROVIDER_RESULT_FILE` in `scripts/run-contract-ci.ts`) is on the branch you build, or CI may false-fail Provider 0/2.
 
 ### Stages
 
