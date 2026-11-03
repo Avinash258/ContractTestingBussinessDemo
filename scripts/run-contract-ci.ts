@@ -304,26 +304,63 @@ function runOneProvider(service: ServiceId | 'Gateway'): {
   process.stdout.write(result.stdout || '');
   process.stderr.write(result.stderr || '');
 
+  // Prefer PROVIDER_RESULT_FILE JSON (authoritative). Banner text is TaxMesh-*: PASSED|FAILED
+  // — not the old "verification PASSED" string that caused false provider 0/N in reports.
   let parsed: any = null;
-  // Verifier prints JSON blob on success/failure in some paths; also look for PASSED line
-  const jsonMatch = combined.match(/\{"errors":\[[\s\S]*"result":\s*(true|false)\s*\}/);
-  if (jsonMatch) {
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch {
-      parsed = null;
+  const fileMatch = combined.match(/PROVIDER_RESULT_FILE=([^\r\n]+)/);
+  if (fileMatch) {
+    const resultFile = fileMatch[1].trim();
+    if (fs.existsSync(resultFile)) {
+      try {
+        parsed = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+  if (!parsed) {
+    const jsonMatch = combined.match(
+      /\{"errors":\[[\s\S]*"result":\s*(true|false)\s*\}/
+    );
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        parsed = null;
+      }
     }
   }
 
+  const escaped = providerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const bannerPassed = new RegExp(`${escaped}:\\s*PASSED\\b`, 'i').test(combined);
+  const bannerFailed = new RegExp(`${escaped}:\\s*FAILED\\b`, 'i').test(combined);
+  const interactions = Array.isArray(parsed?.interactionResults)
+    ? parsed.interactionResults
+    : [];
+  const fileErrors = Array.isArray(parsed?.errors) ? parsed.errors : [];
+  const interactionsAllOk =
+    interactions.length > 0 &&
+    interactions.every(
+      (r: { result?: string }) => String(r.result || '').toUpperCase() === 'OK'
+    );
   const success =
-    (result.status === 0 && /verification PASSED/i.test(combined)) ||
-    parsed?.result === true;
+    (!bannerFailed && bannerPassed) ||
+    parsed?.result === true ||
+    (fileErrors.length === 0 && interactionsAllOk) ||
+    (result.status === 0 &&
+      !bannerFailed &&
+      /verification PASSED/i.test(combined));
 
   return {
     provider: providerName,
     success,
-    interactionResults: parsed?.interactionResults || [],
-    errors: parsed?.errors || (success ? [] : [{ interaction: providerName, mismatch: combined.slice(-2000) }]),
+    interactionResults: interactions,
+    errors:
+      fileErrors.length > 0
+        ? fileErrors
+        : success
+          ? []
+          : [{ interaction: providerName, mismatch: combined.slice(-2000) }],
     durationMs: Date.now() - started,
   };
 }
