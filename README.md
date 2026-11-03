@@ -77,7 +77,7 @@ npm run test:swagger-coverage          # report only → reports/swagger-coverag
 npm run test:swagger-coverage:ci       # --fail-on-gap + refresh docs/SWAGGER_GAP_COVERAGE.md
 ```
 
-Reports land in `reports/pact-report.html` and `reports/latest.json` (service map, CT matrix, failures).
+Reports land in `reports/pact-report.html`, `reports/contract-dependency-graph.html` (CT-00…CT-17 live graph), and `reports/latest.json` (service map, CT matrix, failures).
 
 ### Create / update pipeline
 
@@ -103,10 +103,11 @@ Email uses **Gmail SMTP** (`smtp.gmail.com:587`). Create app password: https://m
 npm run test:contract              # consumer + provider + HTML
 npm run test:contract:consumer-only
 npm run send-report                # needs SMTP_* env
-npm run report:refresh             # rebuild Excel + dashboard from reports/pact-report.json
+npm run report:refresh             # rebuild Excel + dashboard + CT graph from reports/pact-report.json
 ```
 
-Open the interactive UI at [`dashboard/index.html`](dashboard/index.html) (uses `dashboard/data/latest.json` / `latest.js`).
+Open the interactive UI at [`dashboard/index.html`](dashboard/index.html) (uses `dashboard/data/latest.json` / `latest.js`).  
+CT dependency graph: [`reports/contract-dependency-graph.html`](reports/contract-dependency-graph.html) (also in `dashboard/data/` and the dashboard zip).
 
 ## GitHub Actions (full pipeline + gap agent)
 
@@ -187,6 +188,7 @@ Duration colour-scales: green (fast) → yellow → red (slow). Service chips (C
 npm run test:contract              # full run → JSON + Excel + dashboard data
 # or, without re-running tests:
 npm run report:refresh             # from reports/pact-report.json (+ optional reports/swagger-coverage.json)
+# opens: reports/contract-dependency-graph.html (CT-00…CT-17 live status graph)
 ```
 
 Coverage rows come from `reports/swagger-coverage.json` (via `npm run test:swagger-coverage`). Upload endpoints `/api/filing/upload/{acc|clm|mdm}` are reported as **partial** when only the 400 error path is contracted.

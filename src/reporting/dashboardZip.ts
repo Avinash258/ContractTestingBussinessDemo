@@ -4,6 +4,7 @@ import os from 'os';
 import { execSync } from 'child_process';
 import type { PactReport } from './types';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
+import { buildContractDependencyGraphHtml } from './dependencyGraph';
 import { normalizeReportMismatches } from './mismatchFormat';
 
 function sanitizeReportForEmail(report: PactReport): PactReport {
@@ -89,6 +90,12 @@ export function packInteractiveDashboardZip(
     );
 
     fs.writeFileSync(
+      path.join(packageRoot, 'contract-dependency-graph.html'),
+      buildContractDependencyGraphHtml(safeReport),
+      'utf8'
+    );
+
+    fs.writeFileSync(
       path.join(packageRoot, 'data', 'report.json'),
       JSON.stringify(safeReport, null, 2),
       'utf8'
@@ -116,6 +123,7 @@ export function packInteractiveDashboardZip(
 4. Use Expand/Collapse, filters, Load more, and Download Excel in the toolbar.
 
 Optional: open service-map.html for the map-only view.
+Optional: open contract-dependency-graph.html for the CT-00…CT-17 dependency graph.
 Optional: open TaxMesh-Contract-Report.xlsx for the multi-sheet Excel report.
 
 Report data is embedded safely in index.html — no internet required.

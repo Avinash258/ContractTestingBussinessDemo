@@ -8,6 +8,7 @@ import {
   readableMismatchNote,
 } from './mismatchFormat';
 import { buildStandaloneInteractiveDashboard } from './interactiveDashboard';
+import { writeContractDependencyGraph } from './dependencyGraph';
 import { enrichPhaseEndpoints } from './pactEndpointLookup';
 import { loadCoverageRows, writeExcelReport } from './excelReport';
 import { config } from '../config';
@@ -625,6 +626,7 @@ export function renderHtmlReport(report: PactReport): string {
         <li>HTML report: <code>reports/pact-report.html</code></li>
         <li>Excel report: <code>reports/TaxMesh-Contract-Report.xlsx</code></li>
         <li>Interactive map: <code>reports/interactive-service-map.html</code></li>
+        <li>CT dependency graph: <code>reports/contract-dependency-graph.html</code></li>
         <li>Dashboard zip: <code>reports/TaxMesh-Contract-Dashboard.zip</code></li>
         <li>Pact files: ${report.pactFiles.map((f) => `<code>${escapeHtml(f)}</code>`).join(', ') || 'None'}</li>
       </ul>
@@ -744,6 +746,7 @@ export async function writeReports(report: PactReport): Promise<{
   jsonPath: string;
   htmlPath: string;
   interactivePath: string;
+  dependencyGraphPath: string;
   dashboardZipPath: string;
   excelPath: string;
 }> {
@@ -752,6 +755,7 @@ export async function writeReports(report: PactReport): Promise<{
   const latestPath = path.join(dir, 'latest.json');
   const htmlPath = path.join(dir, 'pact-report.html');
   const interactivePath = path.join(dir, 'interactive-service-map.html');
+  const dependencyGraphPath = path.join(dir, 'contract-dependency-graph.html');
   const excelPathDefault = path.join(dir, 'TaxMesh-Contract-Report.xlsx');
 
   const html = renderHtmlReport(report);
@@ -760,6 +764,7 @@ export async function writeReports(report: PactReport): Promise<{
   fs.writeFileSync(htmlPath, html, 'utf8');
 
   fs.writeFileSync(interactivePath, buildStandaloneInteractiveDashboard(report), 'utf8');
+  writeContractDependencyGraph(report, dependencyGraphPath);
 
   const dashboardDataDir = path.join(process.cwd(), 'dashboard', 'data');
   fs.mkdirSync(dashboardDataDir, { recursive: true });
@@ -774,6 +779,16 @@ export async function writeReports(report: PactReport): Promise<{
     buildStandaloneInteractiveDashboard(report),
     'utf8'
   );
+  try {
+    fs.copyFileSync(
+      dependencyGraphPath,
+      path.join(dashboardDataDir, 'contract-dependency-graph.html')
+    );
+  } catch (copyGraphError: any) {
+    console.warn(
+      `Could not copy CT dependency graph into dashboard/data: ${copyGraphError.message}`
+    );
+  }
 
   let excelPath = '';
   try {
@@ -809,5 +824,12 @@ export async function writeReports(report: PactReport): Promise<{
     console.warn(`Failed to package interactive dashboard zip: ${error.message}`);
   }
 
-  return { jsonPath, htmlPath, interactivePath, dashboardZipPath, excelPath };
+  return {
+    jsonPath,
+    htmlPath,
+    interactivePath,
+    dependencyGraphPath,
+    dashboardZipPath,
+    excelPath,
+  };
 }

@@ -42,10 +42,22 @@ async function main() {
   console.log(`  Excel : ${paths.excelPath || '(failed)'}`);
   console.log(`  Zip   : ${paths.dashboardZipPath || '(failed)'}`);
   console.log(`  Map   : ${paths.interactivePath}`);
+  console.log(`  Graph : ${paths.dependencyGraphPath}`);
 
   // Quick sanity checks
   const checks: Array<[string, boolean]> = [
     ['pact-report.html exists', fs.existsSync(paths.htmlPath)],
+    [
+      'contract-dependency-graph.html exists',
+      fs.existsSync(paths.dependencyGraphPath),
+    ],
+    [
+      'CT graph has live inject',
+      fs.existsSync(paths.dependencyGraphPath) &&
+        fs
+          .readFileSync(paths.dependencyGraphPath, 'utf8')
+          .includes('window.__CT_GRAPH__'),
+    ],
     ['Excel exists', !!paths.excelPath && fs.existsSync(paths.excelPath)],
     ['Dashboard zip exists', !!paths.dashboardZipPath && fs.existsSync(paths.dashboardZipPath)],
     ['dashboard/data/latest.json exists', fs.existsSync(path.join('dashboard', 'data', 'latest.json'))],

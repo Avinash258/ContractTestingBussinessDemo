@@ -416,8 +416,14 @@ async function main() {
     },
   });
 
-  const { jsonPath, htmlPath, interactivePath, dashboardZipPath, excelPath } =
-    await writeReports(report);
+  const {
+    jsonPath,
+    htmlPath,
+    interactivePath,
+    dependencyGraphPath,
+    dashboardZipPath,
+    excelPath,
+  } = await writeReports(report);
   console.log('\n=== Pact report (ContractTestDemo / EY_Demo style) ===');
   console.log(
     `  Scope   : ${scopedRun ? selectedServices!.join(', ') : 'all services'}`
@@ -428,6 +434,7 @@ async function main() {
   console.log(`  JSON    : ${jsonPath}`);
   console.log(`  HTML    : ${htmlPath}`);
   console.log(`  Map     : ${interactivePath}`);
+  console.log(`  Graph   : ${dependencyGraphPath}`);
   if (excelPath) console.log(`  Excel   : ${excelPath}`);
   if (dashboardZipPath) console.log(`  Zip     : ${dashboardZipPath}`);
   console.log(`  Dashboard data: dashboard/data/latest.json`);

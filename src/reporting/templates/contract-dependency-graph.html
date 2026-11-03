@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaxMesh Pact Report — Contract Test Dependency Graph</title>
+  <!--
+    Self-contained, offline, no CDN.
+    Live data injected as window.__CT_GRAPH__ by src/reporting/dependencyGraph.ts.
+    Topology falls back to CT-00…CT-17 catalog shape when no live payload is present.
+  -->
+  <style>
+    :root {
+      --bg: #eef3f9; --card: #ffffff; --border: #d0dae8; --text: #1f2937; --muted: #64748b;
+      --passed: #16a34a; --failed: #dc2626; --skipped: #64748b; --amber: #b45309;
+      --pass-bg: #ecfdf5; --fail-bg: #fef2f2; --amber-bg: #fffbeb;
+      --map-bg: #f0f5fb; --map-grid: #e2eaf4; --node-text: #312e81;
+      --label-fill: #ffffff; --label-text: #0f172a;
+      --shadow: 0 8px 28px rgba(15, 23, 42, 0.07);
+      --accent: #1d4ed8; --accent-soft: #eff6ff; --focus: #2563eb;
+      --safe: #15803d; --unsafe: #b91c1c; --ring-track: #e2e8f0;
+      --drawer-w: 380px;
+    }
+    [data-theme="dark"] {
+      --bg: #1a2332; --card: #243044; --border: #3d4f66; --text: #e8eef6; --muted: #a8b6c9;
+      --skipped: #94a3b8; --pass-bg: #14532d; --fail-bg: #7f1d1d; --amber-bg: #78350f;
+      --map-bg: #2a3648; --map-grid: #354457; --node-text: #ddd6fe;
+      --label-fill: #1e293b; --label-text: #f8fafc;
+      --shadow: 0 8px 28px rgba(0,0,0,.28); --accent: #93c5fd; --accent-soft: #1e3a5f; --ring-track: #475569;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Tahoma, system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    .container { max-width: 1480px; margin: 0 auto; padding: 24px 20px 48px; }
+    .sample-badge {
+      display: inline-flex; align-items: center; font-size: .75rem; font-weight: 700;
+      padding: 3px 10px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    }
+    .header, .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--shadow);
+    }
+    h1 { font-size: 1.65rem; margin: 0 0 4px; }
+    h2 { font-size: 1.2rem; margin: 0 0 8px; }
+    h3 { font-size: 1rem; margin: 0 0 8px; }
+    .meta { color: var(--muted); font-size: .92rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+    .toolbar button, .chip, .table-controls button, .table-controls select, .table-controls input, .seg button, .drawer-btn {
+      border: 1px solid var(--border); background: var(--card); color: var(--text);
+      border-radius: 8px; padding: 8px 12px; font: inherit; cursor: pointer; min-height: 40px;
+    }
+    .toolbar button:focus-visible, .chip:focus-visible, .seg button:focus-visible,
+    .drawer-btn:focus-visible, path:focus-visible, .label-g:focus-visible, .node-g:focus-visible, tbody tr:focus-visible {
+      outline: 2px solid var(--focus); outline-offset: 2px;
+    }
+    .chip.active, .seg button.active {
+      border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    }
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .seg button { border: none; border-radius: 0; border-right: 1px solid var(--border); }
+    .seg button:last-child { border-right: none; }
+
+    .verdict { display: flex; gap: 14px; align-items: flex-start; border-radius: 12px; padding: 14px 16px; margin: 12px 0 4px; border: 2px solid; }
+    .verdict.unsafe { border-color: var(--unsafe); background: var(--fail-bg); }
+    .verdict.safe { border-color: var(--safe); background: var(--pass-bg); }
+    .verdict .mark { width: 40px; height: 40px; border-radius: 50%; color: #fff; font-weight: 800; display: grid; place-items: center; flex-shrink: 0; }
+    .verdict.unsafe .mark { background: var(--unsafe); }
+    .verdict.safe .mark { background: var(--safe); }
+    .verdict strong { display: block; font-size: 1.05rem; }
+    .verdict .reason { color: var(--muted); font-size: .9rem; margin-top: 2px; }
+    #overallLabel { font-weight: 800; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin-top: 14px; }
+    .kpi {
+      border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 12px 16px;
+      background: color-mix(in srgb, var(--card) 92%, #f8fafc); position: relative; overflow: hidden;
+    }
+    [data-theme="dark"] .kpi { background: #1a2433; }
+    .kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--kpi-bar, var(--accent)); }
+    .kpi strong { display: block; font-size: 1.5rem; line-height: 1.15; }
+    .kpi .label { font-size: .78rem; color: var(--muted); }
+    .segbar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--ring-track); margin-top: 10px; }
+    .segbar i { display: block; height: 100%; }
+
+    .legend-row { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 8px; font-size: .86rem; color: var(--muted); }
+    .legend-row .sw { display: inline-block; width: 26px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 6px; }
+    .view-panel { display: none; margin-top: 12px; }
+    .view-panel.active { display: block; }
+
+    .graph-layout { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .graph-shell {
+      position: relative;
+      background:
+        linear-gradient(var(--map-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--map-grid) 1px, transparent 1px),
+        var(--map-bg);
+      background-size: 24px 24px, 24px 24px, auto;
+      min-height: 620px; height: 640px; overflow: hidden; cursor: grab; touch-action: none;
+    }
+    .graph-shell.dragging { cursor: grabbing; }
+    #graphSvg { width: 100%; height: 100%; display: block; }
+    .graph-tools { position: absolute; top: 10px; right: 10px; z-index: 4; display: flex; gap: 6px; }
+    .graph-tools button {
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; font: inherit; font-size: .82rem; cursor: pointer; color: var(--text);
+      min-height: 40px; min-width: 40px; box-shadow: var(--shadow);
+    }
+
+    /* Fixed slide-over drawer — does not resize graph */
+    .drawer-root {
+      position: fixed; top: 0; right: 0; width: var(--drawer-w); height: 100vh; z-index: 70;
+      background: var(--card); border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgba(15,23,42,.18);
+      display: flex; flex-direction: column; transform: translateX(105%);
+      transition: transform .22s ease; pointer-events: none;
+    }
+    .drawer-root.open { transform: translateX(0); pointer-events: auto; }
+    .drawer-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+      padding: 14px 14px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .drawer-nav { display: flex; gap: 6px; align-items: center; }
+    .drawer-nav .drawer-btn { padding: 6px 10px; min-width: 40px; }
+    .drawer-body { padding: 14px; overflow: auto; flex: 1; min-height: 0; }
+    .drawer-handle { display: none; }
+    .status-banner {
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-weight: 700;
+      border: 1px solid var(--border);
+    }
+    .status-banner.pass { background: var(--pass-bg); color: var(--passed); }
+    .status-banner.fail { background: var(--fail-bg); color: var(--failed); }
+    .status-banner.skipped { background: color-mix(in srgb, var(--skipped) 18%, var(--card)); color: var(--muted); }
+    .drawer-root .empty { color: var(--muted); font-size: .9rem; }
+    .drawer-root pre {
+      background: #0f172a; color: #fecaca; padding: 10px 12px; border-radius: 8px;
+      overflow: auto; max-height: 220px; font-size: .8rem; white-space: pre-wrap; word-break: break-word;
+    }
+    [data-theme="dark"] .drawer-root pre { background: #020617; }
+    .drawer-root dl { margin: 0; display: grid; grid-template-columns: 108px 1fr; gap: 6px 8px; font-size: .86rem; }
+    .drawer-root dt { color: var(--muted); }
+    .drawer-root dd { margin: 0; overflow-wrap: anywhere; }
+    .drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    @media (max-width: 900px) {
+      .drawer-root {
+        left: 0; right: 0; top: auto; bottom: 0; width: 100%; height: auto; max-height: 70vh;
+        border-left: none; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0;
+        transform: translateY(110%); box-shadow: 0 -12px 32px rgba(15,23,42,.2);
+      }
+      .drawer-root.open { transform: translateY(0); }
+      .drawer-handle {
+        display: block; width: 44px; height: 5px; border-radius: 99px; background: var(--border);
+        margin: 8px auto 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .drawer-root { transition: none; }
+      .edge-dim, .edge-hot, .node-dim, .label-g { transition: none !important; }
+      .fail-pulse { animation: none !important; }
+    }
+
+    .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    @media (max-width: 600px) { .diff { grid-template-columns: 1fr; } }
+    .diff .col { border-radius: 8px; padding: 8px 10px; font-family: Consolas, monospace; font-size: .78rem; white-space: pre-wrap; border: 1px solid var(--border); overflow-wrap: anywhere; }
+    .diff .exp { background: color-mix(in srgb, var(--passed) 12%, var(--card)); }
+    .diff .act { background: color-mix(in srgb, var(--failed) 12%, var(--card)); }
+    .diff .cap { font-family: "Segoe UI", sans-serif; font-size: .72rem; font-weight: 700; margin-bottom: 4px; }
+    .ix-list { list-style: none; padding: 0; margin: 8px 0 0; }
+    .ix-list li { display: flex; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: .82rem; }
+    .spark { display: flex; gap: 3px; align-items: flex-end; height: 28px; margin-top: 6px; }
+    .spark i { width: 8px; border-radius: 2px 2px 0 0; display: block; }
+
+    #tooltip {
+      position: fixed; z-index: 80; display: none; pointer-events: none;
+      background: #0f172a; color: #f1f5f9; border: 1px solid #475569;
+      border-radius: 10px; padding: 10px 12px; font-size: .82rem; max-width: 300px;
+      box-shadow: var(--shadow); transform: translate3d(0,0,0); will-change: transform;
+    }
+    #tooltip strong { display: block; margin-bottom: 4px; }
+
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; }
+    .badge-pass { background: var(--passed); }
+    .badge-fail { background: var(--failed); }
+    .badge-skip { background: var(--skipped); }
+    .badge-warn { background: var(--amber); }
+    .badge-culprit { background: #7c2d12; }
+    .badge-error { background: #7f1d1d; }
+
+    .table-scroll { overflow: auto; max-height: 420px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; font-size: .88rem; vertical-align: top; }
+    th { background: color-mix(in srgb, var(--card) 80%, #f8fafc); position: sticky; top: 0; z-index: 1; cursor: pointer; user-select: none; }
+    [data-theme="dark"] th { background: #1a2433; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover, tbody tr.row-active { background: var(--accent-soft); }
+    tr.fail-row { background: color-mix(in srgb, var(--fail-bg) 70%, transparent); }
+    code { background: color-mix(in srgb, #6366f1 18%, var(--card)); padding: 1px 6px; border-radius: 5px; font-size: .85em; }
+    .empty-row td { text-align: center; color: var(--muted); padding: 18px; }
+
+    .edge-dim, .label-g.edge-dim { opacity: .18; transition: opacity .15s ease; }
+    .edge-hot, .label-g.edge-hot { opacity: 1; transition: opacity .15s ease; }
+    .edge-selected { stroke-width: 4.2 !important; }
+    .halo { pointer-events: none; opacity: 0; }
+    .edge-selected-halo { opacity: .35; }
+    /* CT pills / edges must win over map pan hit-testing */
+    #labels { pointer-events: auto; }
+    .label-g { pointer-events: auto; cursor: pointer; }
+    .label-g .label-pill, .label-g text { pointer-events: auto; }
+    path[data-kind="edge"] { pointer-events: stroke; cursor: pointer; }
+    .node-dim { opacity: .32; transition: opacity .15s ease; }
+    .node-blast .node-rect { stroke-width: 3.6; }
+    .fail-pulse { animation: failPulse 1.8s ease-in-out infinite; }
+    @keyframes failPulse { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: .55; } }
+
+    .matrix-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
+    .matrix { border-collapse: separate; border-spacing: 4px; margin: 8px; min-width: 640px; }
+    .matrix th, .matrix td { min-width: 88px; height: 64px; text-align: center; font-size: .72rem; border: none; padding: 4px; vertical-align: middle; }
+    .matrix th { background: transparent; position: static; color: var(--muted); font-weight: 600; cursor: default; }
+    .matrix td.cell { border-radius: 10px; cursor: pointer; font-weight: 700; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 80%, transparent); color: var(--text); min-height: 40px; }
+    .matrix td.zero { background: color-mix(in srgb, var(--muted) 12%, var(--card)); color: var(--muted); font-weight: 500; cursor: default; }
+    .matrix td.pass { background: color-mix(in srgb, var(--passed) 28%, var(--card)); }
+    .matrix td.fail { background: color-mix(in srgb, var(--failed) 32%, var(--card)); }
+    .matrix td.skipped { background: color-mix(in srgb, var(--skipped) 28%, var(--card)); }
+    .matrix .ct { display: block; font-size: .78rem; }
+    .matrix .ratio { display: block; font-weight: 600; opacity: .85; }
+
+    .fail-grid { display: grid; gap: 12px; }
+    .fail-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: color-mix(in srgb, var(--fail-bg) 55%, var(--card)); cursor: pointer; }
+    .fail-card.skip-card { background: color-mix(in srgb, var(--muted) 10%, var(--card)); }
+    .fail-card .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+    .insights-row { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; margin-top: 12px; }
+    @media (max-width: 900px) { .insights-row { grid-template-columns: 1fr; } }
+    .mini-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--card) 94%, #f8fafc); }
+    [data-theme="dark"] .mini-card { background: #1a2433; }
+    .hbar { display: grid; grid-template-columns: 64px 1fr 48px; gap: 8px; align-items: center; margin: 6px 0; font-size: .82rem; }
+    .hbar .track { height: 10px; border-radius: 6px; background: var(--ring-track); overflow: hidden; }
+    .hbar .track span { display: block; height: 100%; border-radius: 6px; }
+
+    .toast {
+      position: fixed; bottom: 18px; right: 18px; z-index: 90; background: #0f172a; color: #f8fafc;
+      padding: 8px 12px; border-radius: 8px; font-size: .82rem; display: none; box-shadow: var(--shadow);
+    }
+    @media (max-width: 900px) { .toast { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
+
+    @media print {
+      body { background: #fff !important; color: #000 !important; }
+      .toolbar, .graph-tools, #tooltip, .toast, .drawer-root, .no-print { display: none !important; }
+      .header, .card { box-shadow: none; break-inside: avoid; }
+      .graph-shell { height: auto; min-height: 520px; overflow: visible; background: #f8fafc !important; }
+      .view-panel { display: block !important; page-break-before: always; }
+      #view-graph.view-panel { page-break-before: auto; }
+      .badge-pass::after { content: " ✔"; }
+      .badge-fail::after { content: " ✖"; }
+      .badge-skip::after { content: " –"; }
+    }
+
+    /* ---- Executive summary / release gate (added) ---- */
+    .gate { display:flex; flex-wrap:wrap; gap:16px; align-items:center; border:2px solid var(--unsafe); background:var(--fail-bg); border-radius:12px; padding:14px 16px; }
+    .gate.review { border-color:var(--amber); background:var(--amber-bg); }
+    .gate.go { border-color:var(--safe); background:var(--pass-bg); }
+    .gate .tag { font-weight:800; font-size:1.1rem; padding:6px 14px; border-radius:8px; color:#fff; background:var(--unsafe); }
+    .gate.review .tag { background:var(--amber); } .gate.go .tag { background:var(--safe); }
+    .gate ul { list-style:none; margin:0; padding:0; font-size:.86rem; display:grid; gap:2px; }
+    .svc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-top:12px; }
+    .svc { border:1px solid var(--border); border-left:5px solid var(--passed); border-radius:10px; padding:10px 12px; cursor:pointer; background:var(--card); text-align:left; font:inherit; color:var(--text); }
+    .svc.fail { border-left-color:var(--failed); background:var(--fail-bg); } .svc.mixed, .svc.skipped { border-left-color:var(--amber); }
+    .svc b { display:block; } .svc small { color:var(--muted); }
+    .act-row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-top:8px; }
+    .act-row .why { flex:1 1 320px; font-size:.88rem; }
+    .act-row button { border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:8px; padding:8px 12px; font:inherit; cursor:pointer; min-height:40px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="header">
+      <h1>TaxMesh Pact Test Report <span class="sample-badge" id="sampleBadge" hidden>Sample data</span></h1>
+      <p class="meta" id="reportMeta">Contract Test Dependency Graph · CT-00…CT-17 · Pattern: ContractTestDemo / EY_Demo</p>
+      <p>Overall: <strong id="overallLabel">—</strong></p>
+      <div id="verdictBanner" class="verdict unsafe" role="status" aria-live="polite"></div>
+      <div class="toolbar" role="toolbar" aria-label="Report actions">
+        <button type="button" id="themeBtn">Toggle theme</button>
+        <button type="button" id="exportSvgBtn">Export SVG</button>
+        <button type="button" id="exportCsvBtn">Export CSV</button>
+        <button type="button" id="exportJsonBtn">Export JSON</button>
+        <button type="button" id="printBtn">Print</button>
+        <button type="button" id="resetFocusBtn">Reset focus</button>
+      </div>
+    </section>
+
+    <section class="card" id="execBox" aria-labelledby="execHeading">
+      <h2 id="execHeading">Release gate &amp; executive summary</h2>
+      <p class="meta">Plain-language view for business and delivery leads. Click a service to filter the results table.</p>
+      <div id="execGate"></div>
+      <div class="svc-grid" id="execSvc"></div>
+      <h3 style="margin-top:16px">Action list</h3>
+      <div id="execActions"></div>
+    </section>
+
+    <section class="card" aria-labelledby="graphHeading">
+      <h2 id="graphHeading">Contract Test Dependency Graph</h2>
+      <p class="meta">Arrow = <strong>producer → consumer</strong> (<code>contracts.ts</code>). Solid = downstream; dotted = reverse.</p>
+      <div class="kpi-grid" id="kpiBar" aria-label="Contract summary"></div>
+      <div class="insights-row">
+        <div class="mini-card"><h3>Slowest contracts</h3><div id="slowChart"></div></div>
+        <div class="mini-card"><h3>Likely culprits</h3><div id="culpritBox" class="meta"></div></div>
+      </div>
+      <div class="legend-row">
+        <span><i class="sw" style="border-color:#16a34a"></i>Pass</span>
+        <span><i class="sw" style="border-color:#dc2626"></i>Fail</span>
+        <span><i class="sw" style="border-color:#64748b"></i>Skipped</span>
+        <span><i class="sw" style="border-color:#16a34a"></i>Solid request</span>
+        <span><i class="sw" style="border-color:#16a34a;border-top-style:dashed;width:32px"></i>Dotted reverse</span>
+      </div>
+      <div class="toolbar" style="justify-content:space-between">
+        <div class="seg" role="tablist" aria-label="Views">
+          <button type="button" class="active" data-view="graph" role="tab" aria-selected="true">Graph</button>
+          <button type="button" data-view="matrix" role="tab" aria-selected="false">Matrix</button>
+          <button type="button" data-view="failures" role="tab" aria-selected="false">Failures</button>
+        </div>
+        <div class="seg no-print" id="layoutSeg" role="group" aria-label="Graph layout">
+          <button type="button" class="active" data-layout="hub">Hub view</button>
+          <button type="button" data-layout="flow">Flow L→R</button>
+        </div>
+        <div class="toolbar" role="group" aria-label="Status filter" style="margin:0">
+          <button type="button" class="chip active" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" class="chip" data-filter="pass" aria-pressed="false">Passed</button>
+          <button type="button" class="chip" data-filter="fail" aria-pressed="false">Failed</button>
+          <button type="button" class="chip" data-filter="skipped" aria-pressed="false">Skipped</button>
+        </div>
+      </div>
+
+      <div class="view-panel active" id="view-graph" role="tabpanel">
+        <div class="graph-layout" style="margin-top:12px">
+          <div class="graph-shell" id="graphShell">
+            <div class="graph-tools">
+              <button type="button" id="fitBtn">Fit</button>
+              <button type="button" id="zoomInBtn">+</button>
+              <button type="button" id="zoomOutBtn">−</button>
+            </div>
+            <svg id="graphSvg" viewBox="0 0 1140 740" role="img" aria-label="TaxMesh contract dependency graph CT-00 to CT-17">
+              <g id="viewport"></g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="view-panel" id="view-matrix" role="tabpanel" hidden>
+        <p class="meta">Rows = Consumer · Columns = Provider. Click a cell to open the drawer.</p>
+        <div class="matrix-wrap"><table class="matrix" id="matrixTable" aria-label="Consumer × Provider matrix"></table></div>
+      </div>
+      <div class="view-panel" id="view-failures" role="tabpanel" hidden>
+        <p class="meta">Failed and skipped contracts, severity-ordered.</p>
+        <div class="fail-grid" id="failGrid"></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="tableHeading">
+      <h2 id="tableHeading">Contract results table</h2>
+      <p class="meta">Default sort: failed first. Row click selects edge and opens drawer.</p>
+      <div class="table-controls" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+        <input type="search" id="tableSearch" placeholder="Search CT / service / path…" aria-label="Search contracts" />
+        <select id="tableStatus" aria-label="Table status filter">
+          <option value="all">All statuses</option>
+          <option value="fail">Failed</option>
+          <option value="pass">Passed</option>
+          <option value="skipped">Skipped</option>
+        </select>
+      </div>
+      <div class="table-scroll">
+        <table id="ctTable">
+          <thead>
+            <tr>
+              <th data-sort="severity">Severity</th>
+              <th data-sort="id">CT id</th>
+              <th data-sort="from">Producer (from)</th>
+              <th data-sort="to">Consumer (to)</th>
+              <th data-sort="type">Type</th>
+              <th data-sort="status">Status</th>
+              <th data-sort="ratio">Passed/Total</th>
+              <th data-sort="durationMs">Duration</th>
+            </tr>
+          </thead>
+          <tbody id="ctTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Fixed drawer (outside graph layout — no SVG width change) -->
+  <aside class="drawer-root" id="drawer" aria-hidden="true" aria-labelledby="drawerTitle">
+    <div class="drawer-handle" aria-hidden="true"></div>
+    <div class="drawer-head">
+      <div>
+        <h3 id="drawerTitle" tabindex="-1">Edge details</h3>
+        <p class="empty" id="drawerEmpty">Select a contract edge.</p>
+      </div>
+      <div class="drawer-nav">
+        <button type="button" class="drawer-btn" id="drawerPrev" aria-label="Previous edge">‹</button>
+        <button type="button" class="drawer-btn" id="drawerNext" aria-label="Next edge">›</button>
+        <button type="button" class="drawer-btn" id="drawerClose" aria-label="Close drawer">✕</button>
+      </div>
+    </div>
+    <div class="drawer-body" id="drawerBody" hidden></div>
+  </aside>
+
+  <div id="tooltip" role="tooltip"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =========================================================
+   * DATA LAYER — topology + mock results (do not invent names)
+   * ========================================================= */
+  const EDGE_TOPOLOGY = [
+    { id: 'CT-00', from: 'CLM', to: 'MDM', type: 'solid', path: '/contracts/ct-00/engagement-context', title: 'Engagement context' },
+    { id: 'CT-01', from: 'MDM', to: 'ACC', type: 'solid', path: '/contracts/ct-01/entities', title: 'Entities for account mapping' },
+    { id: 'CT-02', from: 'MDM', to: 'TAX', type: 'solid', path: '/contracts/ct-02/tax-attributes', title: 'Entity tax attributes' },
+    { id: 'CT-03', from: 'MDM', to: 'ALC', type: 'solid', path: '/contracts/ct-03/ownership', title: 'Partner ownership' },
+    { id: 'CT-04', from: 'MDM', to: 'DOC', type: 'solid', path: '/contracts/ct-04/filing-meta', title: 'Filing metadata' },
+    { id: 'CT-05', from: 'ACC', to: 'MDM', type: 'dotted', path: '/contracts/ct-05/mapping-gaps', title: 'Missing entity / account codes' },
+    { id: 'CT-06', from: 'ACC', to: 'TAX', type: 'solid', path: '/contracts/ct-06/book-balances', title: 'Book account balances' },
+    { id: 'CT-07', from: 'ACC', to: 'ALC', type: 'solid', path: '/contracts/ct-07/capital-map', title: 'Capital account mappings' },
+    { id: 'CT-08', from: 'TAX', to: 'MDM', type: 'dotted', path: '/contracts/ct-08/attribute-gaps', title: 'Tax attribute corrections' },
+    { id: 'CT-09', from: 'TAX', to: 'ACC', type: 'dotted', path: '/contracts/ct-09/btt-asks', title: 'Book-to-tax reconciling asks' },
+    { id: 'CT-10', from: 'TAX', to: 'ALC', type: 'solid', path: '/contracts/ct-10/taxable-income', title: 'Taxable income buckets' },
+    { id: 'CT-11', from: 'TAX', to: 'DOC', type: 'solid', path: '/contracts/ct-11/tax-summary', title: 'Tax computation summary' },
+    { id: 'CT-12', from: 'ALC', to: 'MDM', type: 'dotted', path: '/contracts/ct-12/ownership-issues', title: 'Ownership validation issues' },
+    { id: 'CT-13', from: 'ALC', to: 'TAX', type: 'dotted', path: '/contracts/ct-13/allocation-needs', title: 'Adjusted tax amount needs' },
+    { id: 'CT-14', from: 'ALC', to: 'DOC', type: 'solid', path: '/contracts/ct-14/partner-allocations', title: 'Partner allocation / K-1 data' },
+    { id: 'CT-15', from: 'DOC', to: 'MDM', type: 'dotted', path: '/contracts/ct-15/entity-print-needs', title: 'Legal name / EIN for forms' },
+    { id: 'CT-16', from: 'DOC', to: 'TAX', type: 'dotted', path: '/contracts/ct-16/tax-line-needs', title: 'Tax line amounts for forms' },
+    { id: 'CT-17', from: 'DOC', to: 'ALC', type: 'dotted', path: '/contracts/ct-17/capital-restatement', title: 'Partner capital restatement' },
+  ];
+
+  const SERVICE_META = {
+    CLM: { name: 'Client Management' }, MDM: { name: 'Master Data' }, ACC: { name: 'Accounting' },
+    TAX: { name: 'Tax Computation' }, ALC: { name: 'Allocations' }, DOC: { name: 'Forms & Documents' },
+  };
+  function mkIx(status, kind, name, ms) { return { status, kind, name, durationMs: ms }; }
+
+  /** Live payload from dependencyGraph.ts (window.__CT_GRAPH__). Mock block is offline fallback only. */
+  const LIVE = window.__CT_GRAPH__ && typeof window.__CT_GRAPH__ === 'object' ? window.__CT_GRAPH__ : null;
+  const MOCK_RESULTS_FALLBACK = {
+    'CT-00': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 85, lastRun: '2026-10-30T10:12:00Z', errorMessage: null, expected: null, actual: null, history: ['pass','pass','pass','pass','pass','pass','pass','pass','pass','pass'], interactions: [mkIx('pass','consumer','engagement context shape',42), mkIx('pass','provider','verify engagement-context',43)] },
+    'CT-01': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 72, lastRun: '2026-10-30T10:12:01Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','entities list',35), mkIx('pass','provider','verify entities',37)] },
+    'CT-02': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 91, lastRun: '2026-10-30T10:12:02Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','tax attributes',44), mkIx('pass','provider','verify tax-attributes',47)] },
+    'CT-03': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 68, lastRun: '2026-10-30T10:12:03Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','ownership',33), mkIx('pass','provider','verify ownership',35)] },
+    'CT-04': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 77, lastRun: '2026-10-30T10:12:04Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','filing meta',38), mkIx('pass','provider','verify filing-meta',39)] },
+    'CT-05': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 80, lastRun: '2026-10-30T10:12:05Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','mapping gaps',40), mkIx('pass','provider','verify mapping-gaps',40)] },
+    'CT-06': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 95, lastRun: '2026-10-30T10:12:06Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','book balances',46), mkIx('pass','provider','verify book-balances',49)] },
+    'CT-07': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 70, lastRun: '2026-10-30T10:12:07Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','capital map',34), mkIx('pass','provider','verify capital-map',36)] },
+    'CT-08': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 88, lastRun: '2026-10-30T10:12:08Z', errorMessage: null, expected: null, actual: null, history: ['pass','pass','fail','pass','pass','pass','pass','pass','pass','pass'], interactions: [mkIx('pass','consumer','attribute gaps',41), mkIx('pass','provider','verify attribute-gaps',47)] },
+    'CT-09': { status: 'fail', total: 2, passed: 1, failed: 1, durationMs: 140, lastRun: '2026-10-30T10:12:09Z', errorMessage: 'Provider verification failed\nExpected: body.asks to be present (array)\nActual:   field "asks" missing on TAX→ACC CT-09 payload', expected: 'body.asks: array (present)', actual: 'field "asks" missing', history: ['pass','pass','pass','fail','pass','fail','fail','pass','fail','fail'], interactions: [mkIx('pass','consumer','btt asks consumer test',52), mkIx('fail','provider','verify btt-asks — asks missing',88)] },
+    'CT-10': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 74, lastRun: '2026-10-30T10:12:10Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','taxable income',36), mkIx('pass','provider','verify taxable-income',38)] },
+    'CT-11': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 99, lastRun: '2026-10-30T10:12:11Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','tax summary',48), mkIx('pass','provider','verify tax-summary',51)] },
+    'CT-12': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 81, lastRun: '2026-10-30T10:12:12Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','ownership issues',39), mkIx('pass','provider','verify ownership-issues',42)] },
+    'CT-13': { status: 'fail', total: 2, passed: 1, failed: 1, durationMs: 210, lastRun: '2026-10-30T10:12:13Z', errorMessage: 'Provider verification failed\nExpected: HTTP 200\nActual:   HTTP 500 on /contracts/ct-13/allocation-needs', expected: 'HTTP 200', actual: 'HTTP 500', history: ['pass','pass','pass','pass','fail','fail','fail','fail','fail','fail'], interactions: [mkIx('pass','consumer','allocation needs',61), mkIx('fail','provider','verify allocation-needs — 500',149)] },
+    'CT-14': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 66, lastRun: '2026-10-30T10:12:14Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','partner allocations',31), mkIx('pass','provider','verify partner-allocations',35)] },
+    'CT-15': { status: 'skipped', total: 2, passed: 0, failed: 0, durationMs: 0, lastRun: '2026-10-30T10:12:15Z', errorMessage: 'Provider not run for DOC reverse edge in this sample stage', expected: null, actual: null, history: ['pass','pass','skipped','skipped','skipped','skipped','skipped','skipped','skipped','skipped'], interactions: [mkIx('skipped','consumer','entity print needs — not run',0), mkIx('skipped','provider','verify entity-print-needs — not run',0)] },
+    'CT-16': { status: 'pass', total: 2, passed: 2, failed: 0, durationMs: 73, lastRun: '2026-10-30T10:12:16Z', errorMessage: null, expected: null, actual: null, history: Array(10).fill('pass'), interactions: [mkIx('pass','consumer','tax line needs',35), mkIx('pass','provider','verify tax-line-needs',38)] },
+    'CT-17': { status: 'fail', total: 2, passed: 0, failed: 2, durationMs: 155, lastRun: '2026-10-30T10:12:17Z', errorMessage: 'Consumer + provider failed\nExpected: capitalRestatement.amount numberType\nActual:   string "n/a"', expected: 'capitalRestatement.amount: number', actual: 'string "n/a"', history: ['pass','fail','fail','pass','fail','fail','fail','fail','fail','fail'], interactions: [mkIx('fail','consumer','capital restatement type',70), mkIx('fail','provider','verify capital-restatement',85)] },
+  };
+  const MOCK_RESULTS = (LIVE && LIVE.results && typeof LIVE.results === 'object') ? LIVE.results : MOCK_RESULTS_FALLBACK;
+  if (LIVE) {
+    const badge = document.getElementById('sampleBadge');
+    if (badge) badge.hidden = true;
+    const metaEl = document.getElementById('reportMeta');
+    if (metaEl && LIVE.generatedAt) {
+      metaEl.textContent = 'Contract Test Dependency Graph · CT-00…CT-17 · Generated ' + LIVE.generatedAt;
+    }
+    if (Array.isArray(LIVE.topology) && LIVE.topology.length) {
+      EDGE_TOPOLOGY.splice(0, EDGE_TOPOLOGY.length, ...LIVE.topology);
+    }
+    if (LIVE.serviceMeta && typeof LIVE.serviceMeta === 'object') {
+      Object.assign(SERVICE_META, LIVE.serviceMeta);
+    }
+  } else {
+    const badge = document.getElementById('sampleBadge');
+    if (badge) badge.hidden = false;
+  }
+
+  const SERVICES = ['CLM', 'MDM', 'ACC', 'TAX', 'ALC', 'DOC'];
+  const STATUS_COLOR = { pass: '#16a34a', fail: '#dc2626', skipped: '#64748b' };
+  const STATUS_ICON = { pass: '✔', fail: '✖', skipped: '–' };
+  const KNOWN_STATUS = { pass: 1, fail: 1, skipped: 1 };
+  const LANE = 9, NODE_W = 132, NODE_H = 86;
+  const VB = { hub: { w: 1140, h: 740 }, flow: { w: 1300, h: 660 } };
+  const LAYOUTS = {
+    hub: { CLM:{x:48,y:310}, MDM:{x:300,y:310}, ACC:{x:220,y:72}, TAX:{x:560,y:72}, ALC:{x:620,y:310}, DOC:{x:900,y:500} },
+    flow: { CLM:{x:48,y:270}, MDM:{x:250,y:270}, ACC:{x:460,y:110}, TAX:{x:670,y:270}, ALC:{x:880,y:110}, DOC:{x:1080,y:420} },
+  };
+
+  function normalizeResult(raw) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    let status = typeof r.status === 'string' ? r.status : 'skipped';
+    let dataError = false;
+    if (!KNOWN_STATUS[status]) { status = 'skipped'; dataError = true; }
+    let total = Number(r.total); if (!Number.isFinite(total) || total < 0) total = 0;
+    let passed = Number(r.passed); if (!Number.isFinite(passed) || passed < 0) passed = 0;
+    let failed = Number(r.failed); if (!Number.isFinite(failed) || failed < 0) failed = 0;
+    if (failed > total && total > 0) dataError = true;
+    let durationMs = r.durationMs;
+    if (durationMs == null || !Number.isFinite(Number(durationMs))) durationMs = undefined;
+    else durationMs = Number(durationMs);
+    return {
+      status, total, passed, failed, durationMs,
+      lastRun: r.lastRun == null ? null : String(r.lastRun),
+      errorMessage: r.errorMessage == null ? null : String(r.errorMessage),
+      expected: r.expected == null ? null : String(r.expected),
+      actual: r.actual == null ? null : String(r.actual),
+      history: Array.isArray(r.history) ? r.history : null,
+      interactions: Array.isArray(r.interactions) ? r.interactions : [],
+      dataError,
+    };
+  }
+
+  function buildEdges(resultsById) {
+    const src = resultsById && typeof resultsById === 'object' ? resultsById : {};
+    const topoIds = new Set(EDGE_TOPOLOGY.map((t) => t.id));
+    Object.keys(src).forEach((id) => {
+      if (!topoIds.has(id)) console.warn('[TaxMesh report] Ignoring result id not in topology:', id);
+    });
+    return EDGE_TOPOLOGY.map((t) => {
+      const n = normalizeResult(src[t.id]);
+      return { ...t, ...n };
+    });
+  }
+
+  /* =========================================================
+   * LAYOUT
+   * ========================================================= */
+  let layoutMode = 'hub';
+  function nodePos(id) { return LAYOUTS[layoutMode][id]; }
+  function nodeCenter(id) { const p = nodePos(id); return { x: p.x + NODE_W / 2, y: p.y + NODE_H / 2 }; }
+  function nodeRect(id) { const p = nodePos(id); return { x: p.x, y: p.y, w: NODE_W, h: NODE_H }; }
+  function sideToward(a, b) {
+    const A = nodeCenter(a), B = nodeCenter(b), dx = B.x - A.x, dy = B.y - A.y;
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
+    return dy >= 0 ? 'bottom' : 'top';
+  }
+  function portPoint(id, side, index, count) {
+    const r = nodeRect(id); const t = count <= 1 ? 0.5 : (index + 1) / (count + 1);
+    if (side === 'right') return { x: r.x + r.w, y: r.y + r.h * t };
+    if (side === 'left') return { x: r.x, y: r.y + r.h * t };
+    if (side === 'top') return { x: r.x + r.w * t, y: r.y };
+    return { x: r.x + r.w * t, y: r.y + r.h };
+  }
+  function buildGeometry(edgeList) {
+    const outSide = {}, inSide = {};
+    edgeList.forEach((e) => {
+      e._outSide = sideToward(e.from, e.to); e._inSide = sideToward(e.to, e.from);
+      (outSide[e.from + ':' + e._outSide] || (outSide[e.from + ':' + e._outSide] = [])).push(e);
+      (inSide[e.to + ':' + e._inSide] || (inSide[e.to + ':' + e._inSide] = [])).push(e);
+    });
+    Object.keys(outSide).forEach((k) => {
+      const node = k.split(':')[0], c = nodeCenter(node);
+      outSide[k].sort((a, b) => Math.atan2(nodeCenter(a.to).y - c.y, nodeCenter(a.to).x - c.x) - Math.atan2(nodeCenter(b.to).y - c.y, nodeCenter(b.to).x - c.x));
+      outSide[k].forEach((e, i) => { e._outIndex = i; e._outCount = outSide[k].length; });
+    });
+    Object.keys(inSide).forEach((k) => {
+      const node = k.split(':')[0], c = nodeCenter(node);
+      inSide[k].sort((a, b) => Math.atan2(nodeCenter(a.from).y - c.y, nodeCenter(a.from).x - c.x) - Math.atan2(nodeCenter(b.from).y - c.y, nodeCenter(b.from).x - c.x));
+      inSide[k].forEach((e, i) => { e._inIndex = i; e._inCount = inSide[k].length; });
+    });
+    const geo = {};
+    edgeList.forEach((e) => {
+      const start = portPoint(e.from, e._outSide, e._outIndex, e._outCount);
+      const end = portPoint(e.to, e._inSide, e._inIndex, e._inCount);
+      const dx = end.x - start.x, dy = end.y - start.y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len, off = (e.type === 'solid' ? 1 : -1) * LANE;
+      const s = { x: start.x + nx * off, y: start.y + ny * off };
+      const t = { x: end.x + nx * off, y: end.y + ny * off };
+      const ul = Math.hypot(t.x - s.x, t.y - s.y) || 1;
+      const tip = { x: t.x - ((t.x - s.x) / ul) * 10, y: t.y - ((t.y - s.y) / ul) * 10 };
+      const c1 = { x: s.x + (tip.x - s.x) * 0.35 + nx * off * 0.4, y: s.y + (tip.y - s.y) * 0.35 + ny * off * 0.4 };
+      const c2 = { x: s.x + (tip.x - s.x) * 0.65 + nx * off * 0.4, y: s.y + (tip.y - s.y) * 0.65 + ny * off * 0.4 };
+      geo[e.id] = { d: `M ${s.x.toFixed(1)} ${s.y.toFixed(1)} C ${c1.x.toFixed(1)} ${c1.y.toFixed(1)}, ${c2.x.toFixed(1)} ${c2.y.toFixed(1)}, ${tip.x.toFixed(1)} ${tip.y.toFixed(1)}` };
+    });
+    return geo;
+  }
+
+  /* =========================================================
+   * STATE
+   * ========================================================= */
+  let edges = buildEdges(MOCK_RESULTS);
+  let filter = 'all', tableStatus = 'all', focusNode = null, selectedId = null;
+  let sortKey = 'severity', sortDir = 1, view = 'graph';
+  let panX = 0, panY = 0, zoom = 1, dragging = false, dragLast = null;
+  let lastTrigger = null;
+  let themeCache = {};
+  const perf = { initialMs: 0, selectSamples: [], hoverSamples: [] };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const svg = document.getElementById('graphSvg');
+  const viewport = document.getElementById('viewport');
+  const tooltip = document.getElementById('tooltip');
+  const drawer = document.getElementById('drawer');
+  const drawerEmpty = document.getElementById('drawerEmpty');
+  const drawerBody = document.getElementById('drawerBody');
+  const drawerTitle = document.getElementById('drawerTitle');
+  const toast = document.getElementById('toast');
+  const graphShell = document.getElementById('graphShell');
+
+  function svgEl(name, attrs) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, String(v));
+    return el;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function cacheTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    themeCache = {
+      labelFill: cs.getPropertyValue('--label-fill').trim() || '#fff',
+      labelText: cs.getPropertyValue('--label-text').trim() || '#0f172a',
+      nodeText: cs.getPropertyValue('--node-text').trim() || '#312e81',
+      muted: cs.getPropertyValue('--muted').trim() || '#64748b',
+      dark: document.documentElement.getAttribute('data-theme') === 'dark',
+    };
+  }
+  function serviceStats(list) {
+    const stats = {};
+    SERVICES.forEach((s) => { stats[s] = { passed: 0, failed: 0, skipped: 0, total: 0 }; });
+    list.forEach((e) => {
+      [e.from, e.to].forEach((s) => {
+        stats[s].total += 1;
+        if (e.status === 'pass') stats[s].passed += 1;
+        else if (e.status === 'fail') stats[s].failed += 1;
+        else stats[s].skipped += 1;
+      });
+    });
+    return stats;
+  }
+  function nodeStatus(st) {
+    if (st.failed > 0) return 'fail';
+    if (st.skipped > 0 && st.passed === 0) return 'skipped';
+    if (st.skipped > 0) return 'mixed';
+    if (st.passed > 0) return 'pass';
+    return 'skipped';
+  }
+  function isFlaky(h) {
+    if (!h || h.length < 3) return false;
+    let flips = 0; for (let i = 1; i < h.length; i++) if (h[i] !== h[i - 1]) flips++;
+    return flips >= 3;
+  }
+  function blastRadius(edge) {
+    if (!edge || edge.status !== 'fail') return { services: [], contracts: [], producer: null };
+    const producer = edge.from;
+    const contracts = edges.filter((e) => e.from === producer || e.to === producer);
+    const services = [...new Set(contracts.flatMap((e) => [e.from, e.to]).filter((s) => s !== producer))];
+    return { services, contracts, producer };
+  }
+  function culprits(list) {
+    const map = {};
+    list.filter((e) => e.status === 'fail').forEach((e) => {
+      map[e.from] = (map[e.from] || 0) + 1; map[e.to] = (map[e.to] || 0) + 1;
+    });
+    return Object.entries(map).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n }));
+  }
+  function severityRank(s) { return s === 'fail' ? 0 : s === 'skipped' ? 1 : 2; }
+  function fmtDash(v) { return v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v)) ? '—' : String(v); }
+  function ratioText(e) {
+    if (!e.total) return '—';
+    return e.passed + '/' + e.total;
+  }
+
+  function counts() {
+    const total = edges.length;
+    const passed = edges.filter((e) => e.status === 'pass').length;
+    const failed = edges.filter((e) => e.status === 'fail').length;
+    const skipped = edges.filter((e) => e.status === 'skipped').length;
+    const pct = total ? Math.round((passed / total) * 100) : 0;
+    return { total, passed, failed, skipped, pct };
+  }
+  function overallLabel() {
+    const c = counts();
+    if (c.failed > 0) return 'FAILED';
+    if (!c.total || c.skipped === c.total) return 'UNKNOWN';
+    if (c.skipped > 0 && c.passed === 0) return 'UNKNOWN';
+    return 'PASSED';
+  }
+
+  /* =========================================================
+   * RENDER — build once, then class toggles
+   * ========================================================= */
+  function ensureMarkers() {
+    let defs = svg.querySelector('defs');
+    if (!defs) { defs = svgEl('defs'); svg.insertBefore(defs, viewport); }
+    defs.innerHTML = '';
+    Object.entries(STATUS_COLOR).forEach(([key, color]) => {
+      const m = svgEl('marker', { id: 'arrow-' + key, markerWidth: 10, markerHeight: 10, refX: 8, refY: 4, orient: 'auto', markerUnits: 'userSpaceOnUse', viewBox: '0 0 10 8' });
+      m.appendChild(svgEl('path', { d: 'M0,0 L10,4 L0,8 Z', fill: color }));
+      defs.appendChild(m);
+    });
+  }
+
+  function buildGraph() {
+    const t0 = performance.now();
+    cacheTheme();
+    ensureMarkers();
+    const vb = VB[layoutMode];
+    svg.setAttribute('viewBox', `0 0 ${vb.w} ${vb.h}`);
+    viewport.innerHTML = '';
+    const geo = buildGeometry(edges);
+    const gHalo = svgEl('g', { id: 'halos' });
+    const gEdges = svgEl('g', { id: 'edges' });
+    const gLabels = svgEl('g', { id: 'labels' });
+    const gNodes = svgEl('g', { id: 'nodes' });
+    viewport.append(gHalo, gEdges, gLabels, gNodes);
+    const stats = serviceStats(edges);
+    const culpritSet = new Set(culprits(edges).map((c) => c.id));
+
+    edges.forEach((edge) => {
+      const color = STATUS_COLOR[edge.status] || STATUS_COLOR.skipped;
+      const width = edge.status === 'fail' ? 3.2 : 2.4;
+      // Glow = wider low-opacity stroke (no drop-shadow filter)
+      const halo = svgEl('path', {
+        d: geo[edge.id].d, fill: 'none', stroke: color, 'stroke-width': width + 8,
+        class: 'halo', 'data-halo-for': edge.id, 'stroke-linecap': 'round',
+      });
+      gHalo.appendChild(halo);
+
+      const path = svgEl('path', {
+        d: geo[edge.id].d, fill: 'none', stroke: color, 'stroke-width': width,
+        'stroke-dasharray': edge.type === 'dotted' ? '7 5' : 'none',
+        'marker-end': 'url(#arrow-' + (KNOWN_STATUS[edge.status] ? edge.status : 'skipped') + ')',
+        class: 'edge-hot' + (edge.status === 'fail' && !reduceMotion ? ' fail-pulse' : ''),
+        'data-id': edge.id, 'data-kind': 'edge',
+        tabindex: '0', role: 'button',
+        'aria-label': `${edge.id} ${edge.from} to ${edge.to} ${edge.status}`,
+      });
+      path.style.cursor = 'pointer';
+      gEdges.appendChild(path);
+
+      const icon = STATUS_ICON[edge.status] || '–';
+      const labelText = `${edge.id} ${icon}`;
+      const tw = Math.max(70, labelText.length * 8.2), th = 24;
+      const g = svgEl('g', {
+        class: 'label-g edge-hot', 'data-id': edge.id, 'data-kind': 'label',
+        role: 'button', tabindex: '0', 'aria-label': `${edge.id} status ${edge.status}`,
+      });
+      g.style.cursor = 'pointer';
+      // Invisible larger hit target (≥40px) so CT pills open the side drawer reliably
+      g.appendChild(svgEl('rect', {
+        class: 'label-hit', x: -Math.max(tw, 44) / 2, y: -20, width: Math.max(tw, 44), height: 40,
+        fill: 'transparent', stroke: 'none',
+      }));
+      g.appendChild(svgEl('rect', {
+        class: 'label-pill', x: -tw / 2, y: -th / 2, width: tw, height: th, rx: 12, ry: 12,
+        fill: themeCache.labelFill, stroke: color, 'stroke-width': 1.5,
+      }));
+      const t = svgEl('text', {
+        x: 0, y: 4.5, 'text-anchor': 'middle', fill: themeCache.labelText,
+        'font-size': 12, 'font-weight': 700, 'font-family': 'Segoe UI, sans-serif',
+      });
+      t.textContent = labelText;
+      g.appendChild(t);
+      gLabels.appendChild(g);
+      try {
+        const mid = path.getPointAtLength(path.getTotalLength() / 2);
+        geo[edge.id].lx = mid.x; geo[edge.id].ly = mid.y; geo[edge.id].tw = tw; geo[edge.id].th = th;
+        g.setAttribute('transform', `translate(${mid.x}, ${mid.y})`);
+      } catch (_) {}
+    });
+
+    // Nudge colliding labels once at build
+    const placed = [];
+    [...gLabels.querySelectorAll('g.label-g')].forEach((g) => {
+      const id = g.getAttribute('data-id'); const meta = geo[id]; if (!meta) return;
+      let x = meta.lx, y = meta.ly;
+      for (let n = 0; n < 8; n++) {
+        let hit = false;
+        for (const p of placed) {
+          if (Math.abs(p.x - x) < (p.tw + meta.tw) / 2 + 4 && Math.abs(p.y - y) < (p.th + meta.th) / 2 + 2) {
+            y += (meta.ly >= p.y ? 1 : -1) * 16; hit = true; break;
+          }
+        }
+        if (!hit) break;
+      }
+      g.setAttribute('transform', `translate(${x}, ${y})`);
+      placed.push({ x, y, tw: meta.tw, th: meta.th });
+    });
+
+    SERVICES.forEach((id) => {
+      const p = nodePos(id), st = stats[id], ns = nodeStatus(st);
+      const border = ns === 'fail' ? STATUS_COLOR.fail : ns === 'pass' ? STATUS_COLOR.pass : ns === 'mixed' ? '#b45309' : STATUS_COLOR.skipped;
+      const fill = ns === 'fail' ? (themeCache.dark ? '#7f1d1d' : '#fef2f2')
+        : ns === 'pass' ? (themeCache.dark ? '#14532d' : '#ecfdf5')
+        : ns === 'mixed' ? (themeCache.dark ? '#78350f' : '#fffbeb')
+        : (themeCache.dark ? '#334155' : '#f8fafc');
+      const passPct = st.total ? st.passed / st.total : 0;
+      const g = svgEl('g', {
+        class: 'node-g', 'data-node': id, 'data-kind': 'node',
+        transform: `translate(${p.x}, ${p.y})`, role: 'button', tabindex: '0',
+        'aria-label': `${id} ${SERVICE_META[id].name} ${st.passed}/${st.total} passed`,
+      });
+      g.style.cursor = 'pointer';
+      const rect = svgEl('rect', { class: 'node-rect', width: NODE_W, height: NODE_H, rx: 14, ry: 14, fill, stroke: border, 'stroke-width': 2.6 });
+      g.appendChild(rect);
+      const name = svgEl('text', { x: 14, y: 28, fill: themeCache.nodeText, 'font-size': 18, 'font-weight': 800, 'font-family': 'Segoe UI, sans-serif' });
+      name.textContent = id; g.appendChild(name);
+      const sub = svgEl('text', { x: 14, y: 48, fill: themeCache.muted, 'font-size': 10, 'font-weight': 600, 'font-family': 'Segoe UI, sans-serif' });
+      sub.textContent = SERVICE_META[id].name; g.appendChild(sub);
+      const score = svgEl('text', { x: 14, y: 70, fill: themeCache.muted, 'font-size': 11, 'font-weight': 600, 'font-family': 'Segoe UI, sans-serif' });
+      score.textContent = `${st.passed}/${st.total} ${STATUS_ICON[ns === 'mixed' ? 'skipped' : ns] || ''}`;
+      g.appendChild(score);
+      const c = 2 * Math.PI * 14, dash = passPct * c;
+      const ring = svgEl('g', { transform: `translate(${NODE_W - 28}, 28)` });
+      ring.appendChild(svgEl('circle', { cx: 0, cy: 0, r: 14, fill: 'none', stroke: 'var(--ring-track)', 'stroke-width': 5 }));
+      ring.appendChild(svgEl('circle', { cx: 0, cy: 0, r: 14, fill: 'none', stroke: border, 'stroke-width': 5, 'stroke-linecap': 'round', 'stroke-dasharray': `${dash} ${c - dash}`, transform: 'rotate(-90 0 0)' }));
+      const pctT = svgEl('text', { x: 0, y: 4, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 700, fill: themeCache.nodeText });
+      pctT.textContent = String(Math.round(passPct * 100));
+      ring.appendChild(pctT); g.appendChild(ring);
+      if (culpritSet.has(id)) {
+        const b = svgEl('text', { x: NODE_W / 2, y: -8, 'text-anchor': 'middle', fill: '#9a3412', 'font-size': 10, 'font-weight': 800, 'font-family': 'Segoe UI, sans-serif' });
+        b.textContent = 'likely culprit'; g.appendChild(b);
+      }
+      gNodes.appendChild(g);
+    });
+
+    applyVisualState();
+    const ms = performance.now() - t0;
+    perf.initialMs = ms;
+    return ms;
+  }
+
+  /** Priority: selected always hot; then blast; then filter; then node focus. */
+  function isEdgeDimmed(e) {
+    if (selectedId === e.id) return false;
+    if (filter !== 'all' && e.status !== filter && selectedId !== e.id) return true;
+    if (selectedId) {
+      const sel = edges.find((x) => x.id === selectedId);
+      if (sel && sel.status === 'fail') {
+        const br = blastRadius(sel);
+        const blast = new Set(br.contracts.map((c) => c.id));
+        if (blast.has(e.id)) return false;
+        return true;
+      }
+    }
+    if (focusNode && e.from !== focusNode && e.to !== focusNode) return true;
+    return false;
+  }
+
+  function applyVisualState() {
+    const t0 = performance.now();
+    let blast = new Set(), blastNodes = new Set();
+    if (selectedId) {
+      const sel = edges.find((e) => e.id === selectedId);
+      if (sel && sel.status === 'fail') {
+        const br = blastRadius(sel);
+        blast = new Set(br.contracts.map((c) => c.id));
+        blastNodes = new Set([br.producer, ...br.services]);
+      }
+    }
+    viewport.querySelectorAll('path[data-kind="edge"], g.label-g').forEach((el) => {
+      const id = el.getAttribute('data-id');
+      const e = edges.find((x) => x.id === id); if (!e) return;
+      const dim = isEdgeDimmed(e);
+      el.classList.toggle('edge-dim', dim);
+      el.classList.toggle('edge-hot', !dim);
+      el.classList.toggle('edge-selected', selectedId === id && el.getAttribute('data-kind') === 'edge');
+      if (el.classList.contains('label-g')) {
+        const pill = el.querySelector('.label-pill');
+        if (pill) pill.setAttribute('stroke-width', selectedId === id ? 2.6 : 1.5);
+      }
+    });
+    viewport.querySelectorAll('.halo').forEach((h) => {
+      h.classList.toggle('edge-selected-halo', h.getAttribute('data-halo-for') === selectedId);
+    });
+    viewport.querySelectorAll('g.node-g').forEach((el) => {
+      const id = el.getAttribute('data-node');
+      let dim = false;
+      if (blastNodes.size) dim = !blastNodes.has(id);
+      else if (focusNode) dim = focusNode !== id;
+      el.classList.toggle('node-dim', dim);
+      el.classList.toggle('node-blast', blastNodes.has(id));
+    });
+    document.querySelectorAll('#ctTableBody tr').forEach((tr) => {
+      tr.classList.toggle('row-active', tr.dataset.id === selectedId);
+    });
+    perf.selectSamples.push(performance.now() - t0);
+    if (perf.selectSamples.length > 200) perf.selectSamples.shift();
+  }
+
+  function applyViewport() {
+    viewport.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoom})`);
+  }
+  function fitToScreen() {
+    const vb = VB[layoutMode];
+    svg.setAttribute('viewBox', `0 0 ${vb.w} ${vb.h}`);
+    panX = 0; panY = 0; zoom = 1; applyViewport();
+  }
+
+  function renderKpis() {
+    const c = counts();
+    const ix = edges.reduce((n, e) => n + (e.interactions ? e.interactions.length : 0), 0);
+    const p = c.total ? (c.passed / c.total) * 100 : 0;
+    const f = c.total ? (c.failed / c.total) * 100 : 0;
+    const s = c.total ? (c.skipped / c.total) * 100 : 0;
+    document.getElementById('kpiBar').innerHTML = `
+      <div class="kpi" style="--kpi-bar:#1d4ed8" data-kpi="total"><strong>${c.total}</strong><span class="label">Contracts</span></div>
+      <div class="kpi" style="--kpi-bar:#6366f1" data-kpi="interactions"><strong>${ix}</strong><span class="label">Interactions (tests)</span></div>
+      <div class="kpi" style="--kpi-bar:var(--passed)" data-kpi="pass"><strong style="color:var(--passed)">${c.passed}</strong><span class="label">Passed</span></div>
+      <div class="kpi" style="--kpi-bar:var(--failed)" data-kpi="fail"><strong style="color:var(--failed)">${c.failed}</strong><span class="label">Failed</span></div>
+      <div class="kpi" style="--kpi-bar:var(--skipped)" data-kpi="skipped"><strong>${c.skipped}</strong><span class="label">Skipped</span></div>
+      <div class="kpi" style="--kpi-bar:var(--passed)" data-kpi="pct"><strong>${c.pct}%</strong><span class="label">Pass rate</span>
+        <div class="segbar"><i style="width:${p}%;background:var(--passed)"></i><i style="width:${f}%;background:var(--failed)"></i><i style="width:${s}%;background:var(--skipped)"></i></div>
+      </div>`;
+    const ol = document.getElementById('overallLabel');
+    ol.textContent = overallLabel();
+    ol.style.color = ol.textContent === 'FAILED' ? 'var(--failed)' : ol.textContent === 'PASSED' ? 'var(--passed)' : 'var(--muted)';
+  }
+  function renderVerdict() {
+    const c = counts();
+    const el = document.getElementById('verdictBanner');
+    if (c.failed > 0) {
+      el.className = 'verdict unsafe';
+      el.innerHTML = `<div class="mark">✖</div><div><strong>NOT SAFE TO DEPLOY — ${c.failed} failed, ${c.skipped} skipped</strong><div class="reason">can-i-deploy style gate: fix failing producer contracts before promoting.</div></div>`;
+    } else if (c.skipped > 0 || !c.total) {
+      el.className = 'verdict unsafe';
+      el.innerHTML = `<div class="mark">!</div><div><strong>NOT SAFE TO DEPLOY — ${c.skipped} skipped</strong><div class="reason">Incomplete verification blocks a clean release verdict.</div></div>`;
+    } else {
+      el.className = 'verdict safe';
+      el.innerHTML = `<div class="mark">✔</div><div><strong>SAFE TO DEPLOY</strong><div class="reason">All mesh contracts passed.</div></div>`;
+    }
+  }
+  function renderSlow() {
+    const top = [...edges].sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0)).slice(0, 5);
+    const max = Math.max(...top.map((e) => e.durationMs || 0), 1);
+    document.getElementById('slowChart').innerHTML = top.map((e) =>
+      `<div class="hbar"><span>${e.id}</span><div class="track"><span style="width:${((e.durationMs || 0) / max) * 100}%;background:${STATUS_COLOR[e.status] || STATUS_COLOR.skipped}"></span></div><span>${fmtDash(e.durationMs)}ms</span></div>`
+    ).join('');
+  }
+  function renderCulprits() {
+    const list = culprits(edges);
+    document.getElementById('culpritBox').innerHTML = list.length
+      ? list.map((c) => `<div style="margin:6px 0"><span class="badge badge-culprit">likely culprit</span> <strong>${c.id}</strong> <span class="meta">— ${c.n} failing edges · ${SERVICE_META[c.id].name}</span></div>`).join('')
+      : '<span class="meta">No service has multiple failing edges.</span>';
+  }
+
+  function renderTable() {
+    const q = (document.getElementById('tableSearch').value || '').toLowerCase().trim();
+    let rows = [...edges];
+    rows.sort((a, b) => {
+      if (sortKey === 'severity') {
+        const d = severityRank(a.status) - severityRank(b.status);
+        return d !== 0 ? d * sortDir : a.id.localeCompare(b.id);
+      }
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'ratio') { av = a.total ? a.passed / a.total : -1; bv = b.total ? b.passed / b.total : -1; }
+      if (av < bv) return -1 * sortDir; if (av > bv) return 1 * sortDir; return 0;
+    });
+    const body = document.getElementById('ctTableBody');
+    body.innerHTML = '';
+    let n = 0;
+    rows.forEach((e) => {
+      if (q && !(`${e.id} ${e.from} ${e.to} ${e.path} ${e.title} ${SERVICE_META[e.from].name} ${SERVICE_META[e.to].name}`).toLowerCase().includes(q)) return;
+      if (tableStatus !== 'all' && e.status !== tableStatus) return;
+      if (filter !== 'all' && e.status !== filter && e.id !== selectedId) return;
+      n++;
+      const tr = document.createElement('tr');
+      tr.className = (e.status === 'fail' ? 'fail-row ' : '') + (selectedId === e.id ? 'row-active' : '');
+      tr.dataset.id = e.id; tr.tabIndex = 0;
+      const stBadge = KNOWN_STATUS[e.status]
+        ? `<span class="badge badge-${e.status === 'pass' ? 'pass' : e.status === 'fail' ? 'fail' : 'skip'}">${STATUS_ICON[e.status]} ${e.status}</span>`
+        : `<span class="badge badge-error">data error</span>`;
+      tr.innerHTML = `
+        <td>${severityRank(e.status) === 0 ? '1 · fail' : severityRank(e.status) === 1 ? '2 · skip' : '3 · pass'}</td>
+        <td><strong>${e.id}</strong>${e.dataError ? ' <span class="badge badge-error">data error</span>' : ''}</td>
+        <td>${e.from}</td><td>${e.to}</td><td>${e.type}</td>
+        <td>${stBadge}</td><td>${ratioText(e)}</td><td>${fmtDash(e.durationMs)} ms</td>`;
+      tr.addEventListener('click', (ev) => { lastTrigger = tr; selectEdge(e.id, { scrollGraph: true }); });
+      tr.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); lastTrigger = tr; selectEdge(e.id, { scrollGraph: true }); }
+        if (ev.key === 'ArrowDown') { ev.preventDefault(); tr.nextElementSibling && tr.nextElementSibling.focus(); }
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); tr.previousElementSibling && tr.previousElementSibling.focus(); }
+      });
+      body.appendChild(tr);
+    });
+    if (!n) {
+      body.innerHTML = `<tr class="empty-row"><td colspan="8">No contracts match</td></tr>`;
+    }
+  }
+
+  function renderMatrix() {
+    const map = {};
+    edges.forEach((e) => { map[e.to + '|' + e.from] = e; });
+    let html = `<tr><th class="corner">Consumer \\ Provider</th>${SERVICES.map((s) => `<th>${s}</th>`).join('')}</tr>`;
+    SERVICES.forEach((cons) => {
+      html += `<tr><th>${cons}</th>`;
+      SERVICES.forEach((prov) => {
+        const e = map[cons + '|' + prov];
+        if (!e) html += `<td class="cell zero">·</td>`;
+        else html += `<td class="cell ${e.status}" tabindex="0" data-id="${e.id}" role="button"><span class="ct">${e.id} ${STATUS_ICON[e.status] || '–'}</span><span class="ratio">${ratioText(e)}</span></td>`;
+      });
+      html += `</tr>`;
+    });
+    const table = document.getElementById('matrixTable');
+    table.innerHTML = html;
+    table.querySelectorAll('td.cell[data-id]').forEach((td) => {
+      const open = () => { lastTrigger = td; selectEdge(td.getAttribute('data-id'), { scrollGraph: true }); setView('graph'); };
+      td.addEventListener('click', open);
+      td.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } });
+    });
+  }
+
+  function renderFailures() {
+    const list = edges.filter((e) => e.status === 'fail' || e.status === 'skipped')
+      .sort((a, b) => severityRank(a.status) - severityRank(b.status) || (b.durationMs || 0) - (a.durationMs || 0));
+    const grid = document.getElementById('failGrid');
+    grid.innerHTML = list.map((e) => {
+      const { exp, act } = parseExpectedActual(e);
+      const br = e.status === 'fail' ? blastRadius(e) : null;
+      return `<article class="fail-card ${e.status === 'skipped' ? 'skip-card' : ''}" data-id="${e.id}" tabindex="0" role="button">
+        <div class="top"><div><strong>${e.id}</strong> · ${e.from} → ${e.to}
+          <span class="badge badge-${e.status === 'fail' ? 'fail' : 'skip'}">${STATUS_ICON[e.status]} ${e.status}</span>
+          ${isFlaky(e.history) ? '<span class="badge badge-warn">flaky</span>' : ''}
+        </div><span class="meta">${fmtDash(e.durationMs)} ms</span></div>
+        <p class="meta">${escapeHtml(e.title || '')}</p>
+        ${br ? `<p><strong>Impacted:</strong> ${br.services.join(', ') || '—'} (${br.contracts.length} contracts)</p>` : ''}
+        ${e.errorMessage ? `<pre>${escapeHtml(e.errorMessage)}</pre>` : ''}
+        ${exp || act ? `<div class="diff"><div class="col exp"><div class="cap">Expected</div>${escapeHtml(exp || '—')}</div><div class="col act"><div class="cap">Actual</div>${escapeHtml(act || '—')}</div></div>` : ''}
+      </article>`;
+    }).join('') || '<p class="meta">No failed or skipped contracts.</p>';
+    grid.querySelectorAll('.fail-card').forEach((card) => {
+      const open = () => { lastTrigger = card; selectEdge(card.getAttribute('data-id'), { scrollGraph: true }); setView('graph'); };
+      card.addEventListener('click', open);
+      card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } });
+    });
+  }
+
+  function parseExpectedActual(edge) {
+    let exp = edge.expected, act = edge.actual;
+    if ((!exp || !act) && edge.errorMessage) {
+      const lines = String(edge.errorMessage).split('\n');
+      const el = lines.find((l) => /expected:/i.test(l));
+      const al = lines.find((l) => /actual:/i.test(l));
+      if (el) exp = el.replace(/^.*Expected:\s*/i, '');
+      if (al) act = al.replace(/^.*Actual:\s*/i, '');
+    }
+    return { exp, act };
+  }
+
+  /* =========================================================
+   * INTERACTION — drawer, selection, delegation
+   * ========================================================= */
+  function openDrawer() {
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+    drawerTitle.focus({ preventScroll: true });
+  }
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    drawerEmpty.hidden = false;
+    drawerBody.hidden = true;
+    if (lastTrigger && typeof lastTrigger.focus === 'function') {
+      try { lastTrigger.focus({ preventScroll: true }); } catch (_) {}
+    }
+  }
+
+  function drawerContent(edge) {
+    const { exp, act } = parseExpectedActual(edge);
+    const br = blastRadius(edge);
+    const ix = edge.interactions || [];
+    const hist = edge.history;
+    return `
+      <div class="status-banner ${edge.status}">${STATUS_ICON[edge.status] || '–'} ${String(edge.status).toUpperCase()}${edge.dataError ? ' · DATA ERROR' : ''}${isFlaky(hist) ? ' · FLAKY' : ''}</div>
+      <dl>
+        <dt>Producer → Consumer</dt><dd>${edge.from} → ${edge.to}</dd>
+        <dt>Type</dt><dd>${edge.type === 'solid' ? 'Solid (downstream)' : 'Dotted (reverse)'}</dd>
+        <dt>Path</dt><dd><code>${escapeHtml(edge.path)}</code></dd>
+        <dt>Title</dt><dd>${escapeHtml(edge.title || '—')}</dd>
+        <dt>Passed/Total</dt><dd>${ratioText(edge)} (failed ${fmtDash(edge.failed)})</dd>
+        <dt>Duration</dt><dd>${fmtDash(edge.durationMs)} ms</dd>
+        <dt>Last run</dt><dd>${fmtDash(edge.lastRun)}</dd>
+      </dl>
+      ${edge.status === 'fail' ? `<p style="margin:12px 0 4px"><strong>Impacted:</strong> ${br.services.join(', ') || '—'} (${br.contracts.length} contracts via producer ${br.producer})</p>` : ''}
+      ${exp || act ? `<div class="diff"><div class="col exp"><div class="cap">Expected</div>${escapeHtml(exp || '—')}</div><div class="col act"><div class="cap">Actual</div>${escapeHtml(act || '—')}</div></div>` : ''}
+      ${edge.errorMessage ? `<p class="meta" style="margin:12px 0 6px">Failure detail</p><pre id="errPre">${escapeHtml(edge.errorMessage)}</pre>` : '<p class="meta" style="margin-top:12px">No error message.</p>'}
+      ${hist && hist.length ? `<div class="meta" style="margin-top:10px">Last ${hist.length} runs ${isFlaky(hist) ? '<span class="badge badge-warn">flaky</span>' : ''}</div><div class="spark">${hist.map((h) => `<i style="height:${h === 'pass' ? 22 : h === 'fail' ? 26 : 12}px;background:${STATUS_COLOR[h] || STATUS_COLOR.skipped}" title="${h}"></i>`).join('')}</div>` : ''}
+      ${ix.length ? `<p class="meta" style="margin:12px 0 4px">Interactions (${ix.length})</p><ul class="ix-list">${ix.map((i) => `<li><span><span class="badge badge-${i.status === 'pass' ? 'pass' : i.status === 'fail' ? 'fail' : 'skip'}">${STATUS_ICON[i.status] || '–'}</span> ${escapeHtml(i.kind)} · ${escapeHtml(i.name)}</span><span class="meta">${fmtDash(i.durationMs)} ms</span></li>`).join('')}</ul>` : ''}
+      <div class="drawer-actions">
+        <button type="button" class="drawer-btn" id="copyErrBtn" ${edge.errorMessage ? '' : 'disabled'}>Copy error</button>
+        <button type="button" class="drawer-btn" id="copyJsonBtn">Copy CT as JSON</button>
+      </div>`;
+  }
+
+  function syncHash() {
+    const parts = [];
+    if (selectedId) parts.push(selectedId);
+    if (filter !== 'all') parts.push('filter=' + filter);
+    if (view !== 'graph') parts.push('tab=' + view);
+    const next = parts.length ? '#' + parts.join('&') : location.pathname + location.search;
+    if (parts.length) history.replaceState(null, '', '#' + parts.join('&'));
+    else history.replaceState(null, '', location.pathname + location.search);
+  }
+
+  function selectEdge(id, opts) {
+    const t0 = performance.now();
+    const edge = edges.find((e) => e.id === id);
+    if (!edge) return;
+    selectedId = id;
+    applyVisualState();
+    renderTable();
+    drawerEmpty.hidden = true;
+    drawerBody.hidden = false;
+    drawerTitle.textContent = edge.id;
+    drawerBody.innerHTML = drawerContent(edge);
+    openDrawer();
+    const copyErr = document.getElementById('copyErrBtn');
+    const copyJson = document.getElementById('copyJsonBtn');
+    if (copyErr) copyErr.onclick = () => copyText(edge.errorMessage || '', 'Error copied');
+    if (copyJson) copyJson.onclick = () => copyText(JSON.stringify(edge, null, 2), 'CT JSON copied');
+    if (!opts || opts.hash !== false) syncHash();
+    if (opts && opts.scrollGraph) {
+      setView('graph');
+      const behavior = reduceMotion ? 'auto' : 'smooth';
+      graphShell.scrollIntoView({ block: 'center', behavior });
+    }
+    perf.selectSamples.push(performance.now() - t0);
+  }
+
+  function deselect() {
+    selectedId = null;
+    focusNode = null;
+    applyVisualState();
+    renderTable();
+    closeDrawer();
+    drawerTitle.textContent = 'Edge details';
+    syncHash();
+  }
+
+  function navEdges(dir) {
+    const list = edges.filter((e) => filter === 'all' || e.status === filter || e.id === selectedId);
+    if (!list.length) return;
+    let idx = list.findIndex((e) => e.id === selectedId);
+    if (idx < 0) idx = 0;
+    else idx = (idx + dir + list.length) % list.length;
+    selectEdge(list[idx].id);
+  }
+
+  function setFilter(next) {
+    filter = next;
+    document.querySelectorAll('.chip[data-filter]').forEach((b) => {
+      const on = b.getAttribute('data-filter') === filter;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    applyVisualState();
+    renderTable();
+    syncHash();
+  }
+
+  function setView(name) {
+    view = name;
+    document.querySelectorAll('.seg button[data-view]').forEach((b) => {
+      const on = b.getAttribute('data-view') === name;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.view-panel').forEach((p) => {
+      const on = p.id === 'view-' + name;
+      p.classList.toggle('active', on);
+      p.hidden = !on;
+    });
+    document.getElementById('layoutSeg').style.display = name === 'graph' ? '' : 'none';
+    if (name === 'matrix') renderMatrix();
+    if (name === 'failures') renderFailures();
+    syncHash();
+  }
+
+  let tipRaf = 0, tipXY = { x: 0, y: 0 }, tipEdge = null;
+  function showTip(edge) {
+    tipEdge = edge;
+    const br = edge.status === 'fail' ? blastRadius(edge) : null;
+    tooltip.style.display = 'block';
+    tooltip.innerHTML = `<strong>${edge.id} ${STATUS_ICON[edge.status] || '–'} ${String(edge.status).toUpperCase()}</strong>
+      Producer ${edge.from} → Consumer ${edge.to}<br/>${ratioText(edge)} · ${fmtDash(edge.durationMs)} ms
+      ${br ? `<br/><span style="color:#fca5a5">Blast: ${br.services.join(', ') || '—'}</span>` : ''}`;
+  }
+  function moveTip(clientX, clientY) {
+    tipXY = { x: clientX, y: clientY };
+    if (tipRaf) return;
+    tipRaf = requestAnimationFrame(() => {
+      tipRaf = 0;
+      const pad = 12, tw = tooltip.offsetWidth || 280, th = tooltip.offsetHeight || 80;
+      let x = tipXY.x + 14, y = tipXY.y + 14;
+      if (x + tw + pad > window.innerWidth) x = tipXY.x - tw - 12;
+      if (y + th + pad > window.innerHeight) y = tipXY.y - th - 12;
+      if (x < pad) x = pad; if (y < pad) y = pad;
+      tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    });
+  }
+  function hideTip() { tooltip.style.display = 'none'; tipEdge = null; }
+
+  function copyText(text, msg) {
+    const done = () => { toast.textContent = msg; toast.style.display = 'block'; setTimeout(() => { toast.style.display = 'none'; }, 1400); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => { fallbackCopy(text); done(); });
+    else { fallbackCopy(text); done(); }
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (_) {} ta.remove();
+  }
+
+  // Event delegation on SVG
+  svg.addEventListener('mouseover', (ev) => {
+    const t0 = performance.now();
+    const hit = ev.target.closest('[data-id], [data-node]');
+    if (!hit || !svg.contains(hit)) return;
+    if (hit.getAttribute('data-node')) {
+      focusNode = hit.getAttribute('data-node');
+      applyVisualState();
+    } else {
+      const id = hit.getAttribute('data-id');
+      const edge = edges.find((e) => e.id === id);
+      if (edge) showTip(edge);
+    }
+    perf.hoverSamples.push(performance.now() - t0);
+    if (perf.hoverSamples.length > 300) perf.hoverSamples.shift();
+  });
+  svg.addEventListener('mouseout', (ev) => {
+    const leave = ev.target.closest('[data-id], [data-node]');
+    const into = ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest('[data-id], [data-node]') : null;
+    if (leave && leave.getAttribute('data-node') && (!into || into.getAttribute('data-node') !== leave.getAttribute('data-node'))) {
+      if (!selectedId) { focusNode = null; applyVisualState(); }
+      else if (focusNode) { focusNode = null; applyVisualState(); }
+    }
+    if (leave && leave.getAttribute('data-id') && (!into || into.getAttribute('data-id') !== leave.getAttribute('data-id'))) hideTip();
+  });
+  svg.addEventListener('mousemove', (ev) => { if (tipEdge) moveTip(ev.clientX, ev.clientY); });
+  function hitFromEvent(ev) {
+    const t = ev.target;
+    if (!t || !t.closest) return null;
+    const hit = t.closest('[data-id]');
+    if (!hit) return null;
+    if (!(svg.contains(hit) || viewport.contains(hit))) return null;
+    return hit;
+  }
+  // Capture: CT edge / label click → fixed right drawer (same as screenshot)
+  graphShell.addEventListener('click', (ev) => {
+    if (ev.target.closest('.graph-tools')) return;
+    if (didPan) { didPan = false; return; } // ignore click after map drag
+    const hit = hitFromEvent(ev);
+    if (!hit) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    lastTrigger = hit;
+    selectEdge(hit.getAttribute('data-id'), { scrollGraph: false });
+  }, true);
+  svg.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const hit = ev.target.closest('[data-id], [data-node]');
+    if (!hit) return;
+    ev.preventDefault();
+    if (hit.getAttribute('data-id')) { lastTrigger = hit; selectEdge(hit.getAttribute('data-id')); }
+    else { focusNode = hit.getAttribute('data-node'); applyVisualState(); }
+  });
+
+  document.querySelectorAll('.chip[data-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => setFilter(btn.getAttribute('data-filter')));
+  });
+  document.querySelectorAll('.seg button[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => setView(btn.getAttribute('data-view')));
+  });
+  document.querySelectorAll('#layoutSeg button[data-layout]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#layoutSeg button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      layoutMode = btn.getAttribute('data-layout');
+      fitToScreen();
+      buildGraph(); // layout change requires rebuild
+    });
+  });
+  document.querySelectorAll('#ctTable th[data-sort]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.getAttribute('data-sort');
+      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+      renderTable();
+    });
+  });
+  let searchTimer = null;
+  document.getElementById('tableSearch').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderTable, 120);
+  });
+  document.getElementById('tableStatus').addEventListener('change', (e) => { tableStatus = e.target.value; renderTable(); });
+  document.getElementById('drawerClose').addEventListener('click', deselect);
+  document.getElementById('drawerPrev').addEventListener('click', () => navEdges(-1));
+  document.getElementById('drawerNext').addEventListener('click', () => navEdges(1));
+  document.getElementById('resetFocusBtn').addEventListener('click', deselect);
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    if (next === 'light') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', 'dark');
+    cacheTheme();
+    buildGraph(); // theme paint needs rebuild for node fills
+    renderTable();
+    if (selectedId) {
+      const edge = edges.find((e) => e.id === selectedId);
+      if (edge) { drawerBody.innerHTML = drawerContent(edge); openDrawer(); }
+    }
+  });
+  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('fitBtn').addEventListener('click', fitToScreen);
+  document.getElementById('zoomInBtn').addEventListener('click', () => { zoom = Math.min(2.5, zoom * 1.15); applyViewport(); });
+  document.getElementById('zoomOutBtn').addEventListener('click', () => { zoom = Math.max(0.45, zoom / 1.15); applyViewport(); });
+  let didPan = false;
+  graphShell.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    zoom = Math.max(0.45, Math.min(2.5, zoom * (ev.deltaY > 0 ? 0.92 : 1.08)));
+    applyViewport();
+  }, { passive: false });
+  graphShell.addEventListener('pointerdown', (ev) => {
+    if (ev.target.closest('.graph-tools')) return;
+    // Do NOT start pan on CT edge / label / node — those open the side drawer
+    if (ev.target.closest('[data-id], [data-node], [data-kind="edge"], .label-g, .label-pill, .label-hit')) return;
+    dragging = true; didPan = false;
+    dragLast = { x: ev.clientX, y: ev.clientY };
+    graphShell.classList.add('dragging');
+    graphShell.setPointerCapture(ev.pointerId);
+  });
+  graphShell.addEventListener('pointermove', (ev) => {
+    if (!dragging || !dragLast) return;
+    const dx = ev.clientX - dragLast.x, dy = ev.clientY - dragLast.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) didPan = true;
+    panX += dx; panY += dy;
+    dragLast = { x: ev.clientX, y: ev.clientY }; applyViewport();
+  });
+  graphShell.addEventListener('pointerup', () => { dragging = false; dragLast = null; graphShell.classList.remove('dragging'); });
+  graphShell.addEventListener('pointercancel', () => { dragging = false; dragLast = null; graphShell.classList.remove('dragging'); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') deselect(); });
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    const header = ['id','from','to','type','status','passed','total','failed','durationMs','path','title'];
+    const lines = [header.join(',')].concat(edges.map((e) => header.map((k) => `"${String(e[k] ?? '').replace(/"/g, '""')}"`).join(',')));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+    a.download = 'taxmesh-ct-results.csv'; a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('exportJsonBtn').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ edges, generatedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }));
+    a.download = 'taxmesh-ct-results.json'; a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('exportSvgBtn').addEventListener('click', () => {
+    const clone = svg.cloneNode(true); clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([clone.outerHTML], { type: 'image/svg+xml' }));
+    a.download = 'taxmesh-ct-graph.svg'; a.click(); URL.revokeObjectURL(a.href);
+  });
+
+  /* ---- Executive summary / release gate (added) ---- */
+  function showToast(msg) { toast.textContent = msg; toast.style.display = 'block'; clearTimeout(showToast.t); showToast.t = setTimeout(() => { toast.style.display = 'none'; }, 1800); }
+  function failStreak(h) { let n = 0; if (!h) return 0; for (let i = h.length - 1; i >= 0 && h[i] === 'fail'; i--) n++; return n; }
+  function svcName(id) { return (SERVICE_META[id] && SERVICE_META[id].name) || id; }
+  function cursorPrompt(e) {
+    const st = failStreak(e.history), bad = (e.interactions || []).filter((i) => i.status === 'fail').map((i) => '- ' + i.kind + ': ' + i.name).join('\n');
+    return 'I am fixing a failing Pact contract test (TaxMesh).\n\n' +
+      'Contract: ' + e.id + ' - ' + e.title + '\nProvider: ' + svcName(e.from) + ' (' + e.from + ')\nConsumer: ' + svcName(e.to) + ' (' + e.to + ')\nEndpoint: ' + e.path + '\n' +
+      'Failing for: ' + (st > 1 ? st + ' runs in a row' : 'latest run') + '\n\nExpected: ' + (e.expected || 'n/a') + '\nActual: ' + (e.actual || 'n/a') + '\nError: ' + String(e.errorMessage || 'n/a').split('\n').join(' | ') + '\n' +
+      (bad ? 'Failing interactions:\n' + bad + '\n' : '') +
+      '\nPlease help me step by step:\n1. Explain the most likely root cause (provider response vs consumer expectation).\n2. Tell me which file(s) to check in the provider and the consumer.\n3. Suggest the smallest code fix and show the changed code.\n4. Tell me how to re-run only this Pact test to confirm.\nDo not change the contract itself unless the provider is correct and the consumer need is outdated - explain first.';
+  }
+  function hist(h) { return h ? '<span class="spark" style="display:inline-flex;height:14px;gap:2px;align-items:center" title="Last ' + h.length + ' runs, oldest to newest">' + h.map((x) => '<i style="width:10px;height:10px;border-radius:2px;background:' + (STATUS_COLOR[x] || '#94a3b8') + '"></i>').join('') + '</span>' : ''; }
+  function allPrompt() { return edges.filter((e) => e.status === 'fail').map(cursorPrompt).join('\n\n=====\n\n'); }
+  function renderExec() {
+    const c = counts(), fails = edges.filter((e) => e.status === 'fail').sort((a, b) => failStreak(b.history) - failStreak(a.history));
+    const flaky = edges.filter((e) => e.status !== 'fail' && isFlaky(e.history)), skipped = edges.filter((e) => e.status === 'skipped');
+    const g = c.failed > 0 ? 'hold' : (c.skipped > 0 || flaky.length ? 'review' : 'go');
+    const row = (ok, t) => '<li>' + (ok ? '✔' : '✖') + ' ' + t + '</li>';
+    document.getElementById('execGate').innerHTML =
+      '<div class="gate ' + (g === 'hold' ? '' : g) + '"><span class="tag">GATE: ' + (g === 'hold' ? 'HOLD' : g === 'review' ? 'REVIEW' : 'PROCEED') + '</span>' +
+      '<div><strong>' + c.passed + ' of ' + c.total + ' contracts verified (' + c.pct + '%)</strong><br><span class="meta">' +
+      (g === 'hold' ? c.failed + ' blocking contract(s) must be fixed before the next phase.' : g === 'review' ? 'No failures, but open items need sign-off.' : 'All exit criteria met.') + '</span></div>' +
+      '<ul>' + row(c.failed === 0, 'No failing contracts (' + c.failed + ')') + row(c.skipped === 0, 'All contracts executed (' + c.skipped + ' skipped)') + row(flaky.length === 0, 'No flaky contracts (' + flaky.length + ')') + '</ul></div>';
+    const st = serviceStats(edges);
+    document.getElementById('execSvc').innerHTML = SERVICES.map((id) => {
+      const x = st[id], ns = nodeStatus(x);
+      return '<button type="button" class="svc ' + ns + '" data-svc="' + id + '"><b>' + escapeHtml(svcName(id)) + '</b><small>' + id + ' · ' + x.passed + '/' + x.total + ' pass' + (x.failed ? ' · ' + x.failed + ' failing' : '') + (x.skipped ? ' · ' + x.skipped + ' skipped' : '') + '</small></button>';
+    }).join('');
+    const items = fails.map((e) => {
+      const s = failStreak(e.history);
+      return '<div class="act-row"><div class="why"><span class="badge badge-fail">FAIL</span> <strong>' + e.id + '</strong> ' + escapeHtml(e.title) + '<br><span class="meta">Impact: ' + escapeHtml(svcName(e.to)) + ' relies on ' + escapeHtml(svcName(e.from)) + '. Expected <code>' + escapeHtml(e.expected || 'n/a') + '</code>, got <code>' + escapeHtml(e.actual || 'n/a') + '</code>' + (s > 1 ? ' · failing ' + s + ' runs in a row' : '') + '</span><br>' + hist(e.history) + '<details><summary class="meta">View prompt (for typing / manual copy)</summary><pre style="white-space:pre-wrap;font-size:.78rem">' + escapeHtml(cursorPrompt(e)) + '</pre></details></div><button type="button" data-copy="' + e.id + '">Copy Copilot prompt</button></div>';
+    }).concat(skipped.map((e) => '<div class="act-row"><div class="why"><span class="badge badge-skip">SKIPPED</span> <strong>' + e.id + '</strong> ' + escapeHtml(e.title) + '<br><span class="meta">Not executed - run it or record a waiver before the gate can pass.</span></div></div>'),
+      flaky.map((e) => '<div class="act-row"><div class="why"><span class="badge badge-warn">FLAKY</span> <strong>' + e.id + '</strong> ' + escapeHtml(e.title) + '<br><span class="meta">Result keeps flipping across recent runs - stabilise before trusting it.</span></div></div>'));
+    document.getElementById('execActions').innerHTML = (fails.length > 1 ? '<button type="button" class="drawer-btn" data-copyall="1">Copy all ' + fails.length + ' failures as one Copilot prompt</button>' : '') + (items.length ? items.join('') : '<p class="meta">No actions required.</p>');
+  }
+  document.getElementById('execBox').addEventListener('click', (ev) => {
+    const cp = ev.target.closest('[data-copy]'), sv = ev.target.closest('[data-svc]'), ca = ev.target.closest('[data-copyall]');
+    if (ca) {
+      const t = allPrompt();
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('All prompts copied'), () => { window.prompt('Copy this prompt:', t); });
+    } else if (cp) {
+      const e = edges.find((x) => x.id === cp.getAttribute('data-copy')); if (!e) return;
+      const txt = cursorPrompt(e);
+      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => showToast('Prompt copied'), () => { window.prompt('Copy this prompt:', txt); });
+    } else if (sv) {
+      const inp = document.getElementById('tableSearch'); inp.value = sv.getAttribute('data-svc'); renderTable();
+      document.getElementById('tableHeading').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+    }
+  });
+
+  function refreshAll() {
+    renderExec(); renderVerdict(); renderKpis(); renderSlow(); renderCulprits();
+    buildGraph(); renderTable();
+    if (view === 'matrix') renderMatrix();
+    if (view === 'failures') renderFailures();
+  }
+
+  function parseHash() {
+    const raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return;
+    const parts = raw.split('&');
+    let id = null;
+    parts.forEach((p) => {
+      if (p.startsWith('filter=')) setFilter(p.slice(7));
+      else if (p.startsWith('tab=')) setView(p.slice(4));
+      else if (/^CT-\d{2}$/.test(p)) id = p;
+    });
+    if (id && edges.some((e) => e.id === id)) selectEdge(id, { hash: false });
+  }
+
+  /* =========================================================
+   * TESTS-HOOKS — harmless production API for Playwright
+   * ========================================================= */
+  function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+  function p95(arr) {
+    if (!arr.length) return 0;
+    const s = [...arr].sort((a, b) => a - b);
+    return s[Math.min(s.length - 1, Math.floor(s.length * 0.95))];
+  }
+
+  window.__report = {
+    EDGE_TOPOLOGY,
+    MOCK_RESULTS,
+    setResults(obj) {
+      edges = buildEdges(obj || {});
+      selectedId = null; focusNode = null;
+      refreshAll();
+      closeDrawer();
+    },
+    getState() {
+      return {
+        selectedId, filter, view, layoutMode, theme: document.documentElement.getAttribute('data-theme') || 'light',
+        counts: counts(), overall: overallLabel(), drawerOpen: drawer.classList.contains('open'),
+        edges: edges.map((e) => ({ id: e.id, status: e.status, from: e.from, to: e.to, dataError: !!e.dataError })),
+      };
+    },
+    selectEdge(id) { selectEdge(id); },
+    deselect() { deselect(); },
+    setFilter(f) { setFilter(f); },
+    setView(v) { setView(v); },
+    getPerf() {
+      return {
+        initialMs: perf.initialMs,
+        selectAvg: avg(perf.selectSamples), selectP95: p95(perf.selectSamples),
+        hoverAvg: avg(perf.hoverSamples), hoverP95: p95(perf.hoverSamples),
+        selectN: perf.selectSamples.length, hoverN: perf.hoverSamples.length,
+      };
+    },
+    rebuild() { buildGraph(); },
+  };
+
+  // Boot
+  fitToScreen();
+  refreshAll();
+  parseHash();
+  window.addEventListener('hashchange', () => {
+    if (!location.hash) deselect();
+    else parseHash();
+  });
+})();
+</script>
+</body>
+</html>
