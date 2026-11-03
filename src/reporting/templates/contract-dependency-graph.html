@@ -467,7 +467,10 @@
     if (badge) badge.hidden = true;
     const metaEl = document.getElementById('reportMeta');
     if (metaEl && LIVE.generatedAt) {
-      metaEl.textContent = 'Contract Test Dependency Graph · CT-00…CT-17 · Generated ' + LIVE.generatedAt;
+      metaEl.textContent =
+        'Contract Test Dependency Graph · CT-00…CT-17 · Generated ' +
+        formatDate(LIVE.generatedAt);
+      metaEl.title = String(LIVE.generatedAt);
     }
     if (Array.isArray(LIVE.topology) && LIVE.topology.length) {
       EDGE_TOPOLOGY.splice(0, EDGE_TOPOLOGY.length, ...LIVE.topology);
@@ -660,7 +663,17 @@
     return Object.entries(map).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n }));
   }
   function severityRank(s) { return s === 'fail' ? 0 : s === 'skipped' ? 1 : 2; }
-  function fmtDash(v) { return v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v)) ? '—' : String(v); }
+  /** Match dashboard index.html date display (local locale, not raw UTC ISO). */
+  function formatDate(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isFinite(d.getTime()) ? d.toLocaleString() : String(value);
+  }
+  function fmtDash(v) {
+    if (v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v))) return '—';
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return formatDate(v);
+    return String(v);
+  }
   function ratioText(e) {
     if (!e.total) return '—';
     return e.passed + '/' + e.total;
