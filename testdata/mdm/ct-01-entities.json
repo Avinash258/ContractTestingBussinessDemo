@@ -4,14 +4,14 @@
   "entities": [
     {
       "entityId": "ENT-ALPHA-LP",
-      "legalName": "Alpha Partners LP",
+      "entityName": "Alpha Partners LP",
       "ein": "12-3456789",
       "entityType": "partnership",
       "taxYear": 2025
     },
     {
       "entityId": "ENT-BETA-LLC",
-      "legalName": "Beta Holdings LLC",
+      "entityName": "Beta Holdings LLC",
       "ein": "98-7654321",
       "entityType": "disregarded",
       "taxYear": 2025

@@ -5,12 +5,14 @@ import {
   clmContractsCatalogBody,
   clmDownstreamMdmBody,
   clmHealthBody,
+  clmV2StatusBody,
   ct00EngagementBody,
 } from '../../src/matchers/ct00';
 import {
   clmContractsCatalogFixture,
   clmDownstreamMdmFixture,
   clmHealthFixture,
+  clmV2StatusFixture,
   engagementFixture,
 } from '../../src/fixtures/engagement';
 import { testDefaults } from '../../src/testdata';
@@ -41,6 +43,29 @@ describe('MDM ← CLM contracts (CT-00)', () => {
         expect(health.status).toBe(clmHealthFixture.status);
         expect(health.produced).toContain(clmHealthFixture.produced[0]);
       });
+  });
+
+  it('GET /v2/status — CLM readiness and engagement status', async () => {
+      await pact
+        .addInteraction()
+        .given('CLM v2 status is available')
+        .uponReceiving('an MDM request for CLM v2 readiness status')
+        .withRequest('GET', '/v2/status', (builder) => {
+          builder.headers({ Accept: 'application/json' });
+        })
+        .willRespondWith(200, (builder) => {
+          builder.headers({ 'Content-Type': 'application/json' });
+          builder.jsonBody(clmV2StatusBody());
+        })
+        .executeTest(async (mockServer) => {
+          const client = new ClmClient(mockServer.url);
+          const status = await client.getV2Status();
+          expect(status.ready).toBe(clmV2StatusFixture.ready);
+          expect(status.engagementId).toBe(clmV2StatusFixture.engagementId);
+          expect(status.entityName).toBe(clmV2StatusFixture.entityName);
+          expect(status.taxYear).toBe(clmV2StatusFixture.taxYear);
+          expect(status.feeds).toContain(clmV2StatusFixture.feeds[0]);
+        });
   });
 
   it('GET /contracts — CLM lists CT-00 produced for MDM', async () => {

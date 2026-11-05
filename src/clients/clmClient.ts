@@ -5,6 +5,7 @@ import {
   assertSchema,
   clmContractsCatalogSchema,
   clmHealthSchema,
+  clmV2StatusSchema,
   ct00EngagementSchema,
   type Ct00Engagement,
 } from '../schemas/ct00';
@@ -38,6 +39,14 @@ export class ClmClient {
       throw new Error(`CLM /health returned ${res.status}`);
     }
     return assertSchema(clmHealthSchema, res.data, 'GET /health');
+  }
+
+  async getV2Status() {
+    const res = await this.http.get('/v2/status');
+    if (res.status !== 200) {
+      throw new Error(`CLM /v2/status returned ${res.status}`);
+    }
+    return assertSchema(clmV2StatusSchema, res.data, 'GET /v2/status');
   }
 
   async getContractsCatalog() {

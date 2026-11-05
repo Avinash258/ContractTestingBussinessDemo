@@ -15,6 +15,7 @@ export function buildStateHandlers(): Record<string, () => Promise<void>> {
     'TaxMesh data-flow catalog is available': noop,
     'TaxMesh flow edges are available': noop,
     'CLM service is running': noop,
+    'CLM v2 status is available': noop,
     'CLM produces CT-00 for MDM': noop,
     'CLM has engagement context for MDM': noop,
     'CLM has downstream contracts to MDM': noop,

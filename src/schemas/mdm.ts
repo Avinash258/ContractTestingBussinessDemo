@@ -24,7 +24,7 @@ export const ct01EntitiesSchema = z
       .array(
         z.object({
           entityId: z.string().min(1),
-          legalName: z.string().min(1),
+          entityName: z.string().min(1),
           ein: z.string().min(1),
           entityType: z.string().min(1),
           taxYear: z.number().int().positive(),

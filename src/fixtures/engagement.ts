@@ -5,3 +5,4 @@ export const engagementFixture = clm.engagementContext;
 export const clmHealthFixture = clm.health;
 export const clmContractsCatalogFixture = clm.contractsCatalog;
 export const clmDownstreamMdmFixture = clm.downstreamMdm;
+export const clmV2StatusFixture = clm.v2Status;

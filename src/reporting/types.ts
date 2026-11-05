@@ -96,6 +96,7 @@ export interface PactReport {
       covered?: number;
       partial?: number;
       missing?: number;
+      mismatch?: number;
       deferred?: number;
     };
     rows?: Array<{

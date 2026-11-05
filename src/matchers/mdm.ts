@@ -39,7 +39,7 @@ export function ct01EntitiesBody() {
     entities: eachLike(
       like({
         entityId: string(e.entityId),
-        legalName: string(e.legalName),
+        entityName: string(e.entityName),
         ein: string(e.ein),
         entityType: string(e.entityType),
         taxYear: integer(e.taxYear),

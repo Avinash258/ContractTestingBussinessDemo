@@ -3,10 +3,11 @@ import {
   clmContractsCatalogFixture,
   clmDownstreamMdmFixture,
   clmHealthFixture,
+  clmV2StatusFixture,
   engagementFixture,
 } from '../fixtures/engagement';
 
-const { string, integer, like, eachLike, regex } = MatchersV3;
+const { string, integer, boolean, like, eachLike, regex } = MatchersV3;
 
 /** Flexible ISO-ish timestamp from CLM producer envelope (full-string match) */
 const isoTimestamp = (example: string) =>
@@ -38,6 +39,20 @@ export function clmHealthBody() {
     service: string(clmHealthFixture.service),
     produced: eachLike(string(clmHealthFixture.produced[0]), 1),
     consumed: like(clmHealthFixture.consumed),
+  });
+}
+
+export function clmV2StatusBody() {
+  const status = clmV2StatusFixture;
+  return like({
+    apiVersion: integer(status.apiVersion),
+    service: string(status.service),
+    ready: boolean(status.ready),
+    engagementId: string(status.engagementId),
+    entityName: string(status.entityName),
+    taxYear: integer(status.taxYear),
+    correlationId: string(status.correlationId),
+    feeds: eachLike(string(status.feeds[0]), 1),
   });
 }
 

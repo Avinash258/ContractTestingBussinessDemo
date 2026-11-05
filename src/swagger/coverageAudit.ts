@@ -209,6 +209,8 @@ export function collectCoveredConcrete(opts: {
     }
   }
 
+  add('GET', '/api/proxy/CLM/v2/status', 'catalog:service-path:CLM');
+
   for (const ct of CONTRACTS) {
     add('GET', ct.path, `catalog:${ct.id}:produce`);
     add('GET', `/api/proxy/${ct.producer}${ct.path}`, `catalog:${ct.id}:swagger-proxy`);
@@ -658,7 +660,7 @@ export function formatCoverageMarkdown(report: CoverageReport): string {
   lines.push(
     `## Equivalent coverage note`,
     ``,
-    `Service Pact paths \`/health\`, \`/contracts/ct-*\`, \`/downstream/{peer}\` equal Swagger \`/api/proxy/{SVC}/…\` (gateway is a transparent proxy).`,
+    `Service Pact paths \`/health\`, \`/contracts/ct-*\`, \`/downstream/{peer}\` equal Swagger \`/api/proxy/{SVC}/ï¿½\` (gateway is a transparent proxy).`,
     ``
   );
   return lines.join('\n');

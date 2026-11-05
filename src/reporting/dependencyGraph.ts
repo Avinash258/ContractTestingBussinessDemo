@@ -6,12 +6,26 @@ import type { PactReport, PhaseStatus } from './types';
 
 export type CtGraphStatus = 'pass' | 'fail' | 'skipped';
 
-export interface CtGraphInteraction {
+interface CtGraphInteractionBase {
   status: CtGraphStatus;
-  kind: 'consumer' | 'provider';
   name: string;
   durationMs: number;
 }
+
+export interface CtGraphConsumerInteraction extends CtGraphInteractionBase {
+  kind: 'consumer';
+}
+
+export interface CtGraphProviderInteraction extends CtGraphInteractionBase {
+  kind: 'provider';
+  expected?: string;
+  actual?: string;
+  reason?: string;
+}
+
+export type CtGraphInteraction =
+  | CtGraphConsumerInteraction
+  | CtGraphProviderInteraction;
 
 export interface CtGraphResult {
   status: CtGraphStatus;
@@ -101,8 +115,8 @@ export function buildServiceMeta(): Record<string, { name: string }> {
 function collectConsumerHits(
   report: PactReport,
   ct: ContractDef
-): CtGraphInteraction[] {
-  const rows: CtGraphInteraction[] = [];
+): CtGraphConsumerInteraction[] {
+  const rows: CtGraphConsumerInteraction[] = [];
   const tests = report.consumer?.tests || [];
   for (const t of tests) {
     const blob = `${t.suite || ''} ${t.name || ''} ${t.endpoint || ''}`;
@@ -135,10 +149,8 @@ function collectConsumerHits(
 function collectProviderHits(
   report: PactReport,
   ct: ContractDef
-): Array<CtGraphInteraction & { expected?: string; actual?: string; reason?: string }> {
-  const rows: Array<
-    CtGraphInteraction & { expected?: string; actual?: string; reason?: string }
-  > = [];
+): CtGraphProviderInteraction[] {
+  const rows: CtGraphProviderInteraction[] = [];
   const interactions = report.provider?.interactions || [];
   for (const ix of interactions) {
     const blob = `${ix.description || ''} ${ix.endpoint || ''} ${ix.path || ''}`;
@@ -186,10 +198,8 @@ function collectProviderHits(
 
 function aggregateCtResult(
   ct: ContractDef,
-  consumerHits: CtGraphInteraction[],
-  providerHits: Array<
-    CtGraphInteraction & { expected?: string; actual?: string; reason?: string }
-  >,
+  consumerHits: CtGraphConsumerInteraction[],
+  providerHits: CtGraphProviderInteraction[],
   generatedAt: string
 ): CtGraphResult {
   // Deduplicate by kind+name
@@ -223,7 +233,7 @@ function aggregateCtResult(
   let expected: string | null = null;
   let actual: string | null = null;
   let errorMessage: string | null = null;
-  if (failRow && 'expected' in failRow) {
+  if (failRow?.kind === 'provider') {
     expected = failRow.expected || null;
     actual = failRow.actual || null;
     const note = readableMismatchNote(

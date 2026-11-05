@@ -9,6 +9,7 @@ import clmHealth from '../../testdata/clm/health.json';
 import clmContractsCatalog from '../../testdata/clm/contracts-catalog.json';
 import clmEngagementContext from '../../testdata/clm/engagement-context.json';
 import clmDownstreamMdm from '../../testdata/clm/downstream-mdm.json';
+import clmV2Status from '../../testdata/clm/v2-status.json';
 
 import mdmHealth from '../../testdata/mdm/health.json';
 import mdmCt01 from '../../testdata/mdm/ct-01-entities.json';
@@ -48,6 +49,7 @@ export const clm = {
   contractsCatalog: clmContractsCatalog,
   engagementContext: clmEngagementContext,
   downstreamMdm: clmDownstreamMdm,
+  v2Status: clmV2Status,
 } as const;
 
 export const mdm = {

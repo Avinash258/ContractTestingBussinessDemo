@@ -34,6 +34,19 @@ export const clmHealthSchema = z
   })
   .passthrough();
 
+export const clmV2StatusSchema = z
+  .object({
+    apiVersion: z.literal(2),
+    service: z.literal('CLM'),
+    ready: z.boolean(),
+    engagementId: z.string().min(1),
+    entityName: z.string().min(1),
+    taxYear: z.number().int().positive(),
+    correlationId: z.string().min(1),
+    feeds: z.array(z.string()).min(1),
+  })
+  .passthrough();
+
 export const clmContractsCatalogSchema = z
   .object({
     service: z.object({ id: z.string() }).passthrough(),
